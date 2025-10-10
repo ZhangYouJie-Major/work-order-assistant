@@ -1,0 +1,92 @@
+[project]
+name = "work-order-assistant"
+version = "1.0.0"
+description = "智能工单处理助手系统 - 基于 LangGraph 的异步邮件通知系统"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    # FastAPI 核心
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic[email]>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-multipart>=0.0.6",
+
+    # LangChain 生态
+    "langchain>=0.2.16",
+    "langchain-core>=0.2.38",
+    "langchain-community>=0.2.16",
+    "langchain-openai>=0.1.23",
+    "langgraph>=0.2.0",
+
+    # HTTP 客户端
+    "httpx>=0.25.0",
+
+    # 阿里云 OSS
+    "oss2>=2.18.0",
+
+    # 邮件发送
+    "aiosmtplib>=3.0.0",
+
+    # Excel 处理
+    "openpyxl>=3.1.0",
+    "pandas>=2.1.0",
+
+    # 工具库
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.11.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+work_order_assistant = ["py.typed"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
