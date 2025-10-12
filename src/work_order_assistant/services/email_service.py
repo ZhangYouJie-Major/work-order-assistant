@@ -26,7 +26,7 @@ class EmailService:
         """
         self.settings = settings
         logger.info(
-            f"Email Service initialized: SMTP={settings.smtp_host}:{settings.smtp_port}"
+            f"邮件服务初始化: SMTP={settings.smtp_host}:{settings.smtp_port}"
         )
 
     async def send_query_result_email(
@@ -49,7 +49,7 @@ class EmailService:
             result_data: 查询结果数据
             excel_file: Excel 附件内容
         """
-        logger.info(f"Sending query result email for task {task_id}")
+        logger.info(f"发送查询结果邮件 (任务 {task_id})")
 
         subject = f"【工单查询结果】{ticket_id}"
 
@@ -94,7 +94,7 @@ class EmailService:
             to_emails, subject, html_body, "查询结果.xlsx", excel_file
         )
 
-        logger.info(f"Query result email sent successfully to {len(to_emails)} recipients")
+        logger.info(f"查询结果邮件发送成功，收件人: {len(to_emails)} 人")
 
     async def send_dml_review_email(
         self,
@@ -114,7 +114,7 @@ class EmailService:
             ticket_id: 工单编号
             dml_info: DML 信息
         """
-        logger.info(f"Sending DML review email for task {task_id}")
+        logger.info(f"发送 DML 审核邮件 (任务 {task_id})")
 
         subject = f"【工单 DML 待执行】{ticket_id}"
 
@@ -170,8 +170,8 @@ class EmailService:
         await self._send_email(to_emails, subject, html_body, cc_emails)
 
         logger.info(
-            f"DML review email sent successfully to {len(to_emails)} recipients, "
-            f"CC: {len(cc_emails)}"
+            f"DML 审核邮件发送成功，收件人: {len(to_emails)} 人, "
+            f"抄送: {len(cc_emails)} 人"
         )
 
     def _highlight_sql(self, sql: str) -> str:
@@ -325,8 +325,8 @@ class EmailService:
             await smtp.send_message(msg)
             await smtp.quit()
 
-            logger.debug(f"SMTP send successful to {len(recipients)} recipients")
+            logger.debug(f"SMTP 发送成功，收件人: {len(recipients)} 人")
 
         except Exception as e:
-            logger.error(f"Failed to send email via SMTP: {e}")
+            logger.error(f"通过 SMTP 发送邮件失败: {e}")
             raise

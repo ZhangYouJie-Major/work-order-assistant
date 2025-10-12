@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api/v1/work-order", tags=["work-order"])
 task_store: Dict[str, Dict[str, Any]] = {}
 
 
-@router.post("/submit", response_model=WorkOrderSubmitResponse)
+@router.post("", response_model=WorkOrderSubmitResponse)
 async def submit_work_order(
     request: WorkOrderSubmitRequest, background_tasks: BackgroundTasks
 ):
@@ -42,7 +42,7 @@ async def submit_work_order(
     # 生成任务 ID
     task_id = f"task-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}"
 
-    logger.info(f"[{task_id}] Received work order submission")
+    logger.info(f"[{task_id}] 收到工单提交请求")
 
     # 初始化任务状态
     task_store[task_id] = {
@@ -69,7 +69,7 @@ async def submit_work_order(
         ),
     )
 
-    logger.info(f"[{task_id}] Work order accepted, processing in background")
+    logger.info(f"[{task_id}] 工单已接收，后台处理中")
 
     return response
 
@@ -109,7 +109,7 @@ async def process_work_order(task_id: str, request: WorkOrderSubmitRequest):
         task_id: 任务 ID
         request: 工单请求
     """
-    logger.info(f"[{task_id}] Starting work order processing")
+    logger.info(f"[{task_id}] 开始处理工单")
 
     # 更新状态为处理中
     task_store[task_id]["status"] = "processing"
@@ -122,12 +122,12 @@ async def process_work_order(task_id: str, request: WorkOrderSubmitRequest):
             "content": request.content,
             "oss_attachments": [att.model_dump() for att in request.oss_attachments],
             "cc_emails": request.cc_emails,
-            "user": request.user.model_dump(),
+            "user": request.user.model_dump() if request.user else {},
             "metadata": request.metadata.model_dump() if request.metadata else {},
         }
 
         # 执行工作流
-        logger.info(f"[{task_id}] Invoking workflow")
+        logger.info(f"[{task_id}] 调用工作流")
         final_state = await work_order_app.ainvoke(initial_state)
 
         # 更新任务状态
@@ -145,12 +145,12 @@ async def process_work_order(task_id: str, request: WorkOrderSubmitRequest):
         )
 
         if final_state.get("error"):
-            logger.error(f"[{task_id}] Workflow failed: {final_state.get('error')}")
+            logger.error(f"[{task_id}] 工作流失败: {final_state.get('error')}")
         else:
-            logger.info(f"[{task_id}] Workflow completed successfully")
+            logger.info(f"[{task_id}] 工作流完成")
 
     except Exception as e:
-        logger.error(f"[{task_id}] Unexpected error during processing: {e}")
+        logger.error(f"[{task_id}] 处理过程中发生意外错误: {e}")
         task_store[task_id].update(
             {
                 "status": "failed",

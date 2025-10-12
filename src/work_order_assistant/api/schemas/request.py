@@ -38,8 +38,8 @@ class WorkOrderSubmitRequest(BaseModel):
     oss_attachments: List[OSSAttachmentSchema] = Field(
         default_factory=list, description="OSS 附件列表"
     )
-    cc_emails: List[EmailStr] = Field(..., description="抄送邮箱列表", min_length=1)
-    user: UserSchema = Field(..., description="用户信息")
+    cc_emails: List[EmailStr] = Field(default_factory=list, description="抄送邮箱列表")
+    user: Optional[UserSchema] = Field(None, description="用户信息")
     metadata: Optional[MetadataSchema] = Field(None, description="元数据")
 
     class Config:

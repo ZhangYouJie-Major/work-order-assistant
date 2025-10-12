@@ -10,7 +10,8 @@ from .state import WorkOrderState
 from .nodes import (
     intent_recognition_node,
     entity_extraction_node,
-    mcp_query_node,
+    sql_query_node,
+    multi_step_query_node,
     generate_dml_node,
     send_query_email_node,
     send_dml_email_node,
@@ -33,7 +34,8 @@ def create_work_order_workflow():
     # 添加节点
     workflow.add_node("intent_recognition", intent_recognition_node)
     workflow.add_node("entity_extraction", entity_extraction_node)
-    workflow.add_node("mcp_query", mcp_query_node)
+    workflow.add_node("sql_query", sql_query_node)
+    workflow.add_node("multi_step_query", multi_step_query_node)
     workflow.add_node("generate_dml", generate_dml_node)
     workflow.add_node("send_query_email", send_query_email_node)
     workflow.add_node("send_dml_email", send_dml_email_node)
@@ -49,24 +51,25 @@ def create_work_order_workflow():
         "entity_extraction",
         _route_by_operation_type,
         {
-            "query": "mcp_query",
-            "mutation": "generate_dml",
+            "query": "sql_query",
+            "mutation": "multi_step_query",
             "error": END,
         },
     )
 
-    # 查询路径：MCP查询 → 发送查询邮件 → 结束
-    workflow.add_edge("mcp_query", "send_query_email")
+    # 查询路径：SQL查询 → 发送查询邮件 → 结束
+    workflow.add_edge("sql_query", "send_query_email")
     workflow.add_edge("send_query_email", END)
 
-    # 变更路径：生成DML → 发送DML邮件 → 结束
+    # 变更路径：多步骤查询 → 生成DML → 发送DML邮件 → 结束
+    workflow.add_edge("multi_step_query", "generate_dml")
     workflow.add_edge("generate_dml", "send_dml_email")
     workflow.add_edge("send_dml_email", END)
 
     # 编译工作流
     app = workflow.compile()
 
-    logger.info("Work order workflow compiled successfully")
+    logger.info("工单处理工作流编译成功")
 
     return app
 
@@ -88,18 +91,18 @@ def _route_by_operation_type(
 
     # 如果有错误，直接结束
     if error:
-        logger.warning(f"Workflow error detected: {error}")
+        logger.warning(f"检测到工作流错误: {error}")
         return "error"
 
     # 根据操作类型路由
     if operation_type == "query":
-        logger.info("Routing to query path")
+        logger.info("路由到查询路径")
         return "query"
     elif operation_type == "mutation":
-        logger.info("Routing to mutation path")
+        logger.info("路由到变更路径")
         return "mutation"
     else:
-        logger.error(f"Unknown operation type: {operation_type}")
+        logger.error(f"未知的操作类型: {operation_type}")
         return "error"
 
 

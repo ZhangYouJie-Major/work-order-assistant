@@ -31,7 +31,7 @@ async def intent_recognition_node(state: WorkOrderState) -> Dict[str, Any]:
     task_id = state.get("task_id")
     content = state.get("content")
 
-    logger.info(f"[{task_id}] Starting intent recognition")
+    logger.info(f"[{task_id}] 开始意图识别")
 
     try:
         # 加载意图识别提示词
@@ -44,8 +44,8 @@ async def intent_recognition_node(state: WorkOrderState) -> Dict[str, Any]:
         confidence = result.get("confidence", 0.0)
 
         logger.info(
-            f"[{task_id}] Intent recognized: {operation_type} "
-            f"(confidence: {confidence})"
+            f"[{task_id}] 意图识别完成: {operation_type} "
+            f"(置信度: {confidence})"
         )
 
         return {
@@ -54,7 +54,7 @@ async def intent_recognition_node(state: WorkOrderState) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"[{task_id}] Intent recognition failed: {e}")
+        logger.error(f"[{task_id}] 意图识别失败: {e}")
         return {
             "operation_type": "unknown",
             "error": f"意图识别失败: {str(e)}",

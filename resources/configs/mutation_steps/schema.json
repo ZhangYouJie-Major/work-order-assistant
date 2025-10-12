@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Mutation Query Steps Configuration",
+  "description": "定义 mutation 工单的多步骤查询配置",
+  "type": "object",
+  "required": ["work_order_type", "steps"],
+  "properties": {
+    "work_order_type": {
+      "type": "string",
+      "description": "工单类型（如 cancel_marine_order, update_quotation 等）"
+    },
+    "description": {
+      "type": "string",
+      "description": "配置说明"
+    },
+    "steps": {
+      "type": "array",
+      "description": "查询和DML生成步骤",
+      "items": {
+        "type": "object",
+        "required": ["step", "operation"],
+        "properties": {
+          "step": {
+            "type": "integer",
+            "description": "步骤序号"
+          },
+          "operation": {
+            "type": "string",
+            "enum": ["QUERY", "GENERATE_DML"],
+            "description": "操作类型"
+          },
+          "table": {
+            "type": "string",
+            "description": "表名（QUERY 操作需要）"
+          },
+          "where": {
+            "type": "string",
+            "description": "WHERE 条件，支持变量替换如 {receipt_order_no}"
+          },
+          "output_fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "需要输出的字段列表，用于后续步骤"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["UPDATE", "DELETE", "INSERT"],
+            "description": "DML 类型（GENERATE_DML 操作需要）"
+          },
+          "set": {
+            "type": "object",
+            "description": "UPDATE 的 SET 字段（支持变量替换）"
+          },
+          "values": {
+            "type": "object",
+            "description": "INSERT 的 VALUES 字段（支持变量替换）"
+          }
+        }
+      }
+    },
+    "final_sql_template": {
+      "type": "string",
+      "description": "最终生成的 SQL 模板（可选，用于日志）"
+    }
+  }
+}

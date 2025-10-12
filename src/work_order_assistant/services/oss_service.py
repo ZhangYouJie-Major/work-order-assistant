@@ -31,7 +31,7 @@ class OSSService:
             auth, settings.aliyun_oss_endpoint, settings.aliyun_oss_bucket_name
         )
         logger.info(
-            f"OSS Service initialized: bucket={settings.aliyun_oss_bucket_name}, "
+            f"OSS 服务初始化: bucket={settings.aliyun_oss_bucket_name}, "
             f"endpoint={settings.aliyun_oss_endpoint}"
         )
 
@@ -49,13 +49,13 @@ class OSSService:
             Exception: 下载失败
         """
         try:
-            logger.info(f"Downloading file from OSS: {object_key}")
+            logger.info(f"从 OSS 下载文件: {object_key}")
             result = self.bucket.get_object(object_key)
             content = result.read()
-            logger.info(f"File downloaded successfully: {len(content)} bytes")
+            logger.info(f"文件下载成功: {len(content)} 字节")
             return content
         except Exception as e:
-            logger.error(f"Failed to download file {object_key}: {e}")
+            logger.error(f"下载文件失败 {object_key}: {e}")
             raise
 
     def download_from_url(self, url: str) -> bytes:
@@ -88,7 +88,7 @@ class OSSService:
         Returns:
             解析后的结构化数据
         """
-        logger.info(f"Parsing attachment: {url} (type: {mime_type})")
+        logger.info(f"解析附件: {url} (类型: {mime_type})")
 
         try:
             content = self.download_from_url(url)
@@ -111,11 +111,11 @@ class OSSService:
             elif mime_type == "text/plain":
                 return {"raw": content.decode("utf-8")}
             else:
-                logger.warning(f"Unsupported MIME type: {mime_type}, treating as text")
+                logger.warning(f"不支持的 MIME 类型: {mime_type}, 作为文本处理")
                 return {"raw": content.decode("utf-8", errors="ignore")}
 
         except Exception as e:
-            logger.error(f"Failed to parse attachment {url}: {e}")
+            logger.error(f"解析附件失败 {url}: {e}")
             raise
 
     def _extract_object_key(self, url: str) -> str:
@@ -135,7 +135,7 @@ class OSSService:
         parsed = urlparse(url)
         # 去掉开头的 /
         object_key = parsed.path.lstrip("/")
-        logger.debug(f"Extracted object_key: {object_key} from URL: {url}")
+        logger.debug(f"提取 object_key: {object_key} 从 URL: {url}")
         return object_key
 
     def _parse_excel(self, content: bytes) -> Dict[str, Any]:
@@ -161,11 +161,11 @@ class OSSService:
                 ),  # 预览前10行
             }
 
-            logger.info(f"Parsed Excel: {result['row_count']} rows, {len(result['columns'])} columns")
+            logger.info(f"解析 Excel 成功: {result['row_count']} 行, {len(result['columns'])} 列")
             return result
 
         except Exception as e:
-            logger.error(f"Failed to parse Excel: {e}")
+            logger.error(f"解析 Excel 失败: {e}")
             raise ValueError(f"Failed to parse Excel file: {e}")
 
     def _parse_csv(self, content: bytes) -> Dict[str, Any]:
@@ -189,11 +189,11 @@ class OSSService:
                 "preview": df.head(10).to_dict(orient="records"),
             }
 
-            logger.info(f"Parsed CSV: {result['row_count']} rows, {len(result['columns'])} columns")
+            logger.info(f"解析 CSV 成功: {result['row_count']} 行, {len(result['columns'])} 列")
             return result
 
         except Exception as e:
-            logger.error(f"Failed to parse CSV: {e}")
+            logger.error(f"解析 CSV 失败: {e}")
             raise ValueError(f"Failed to parse CSV file: {e}")
 
     def check_file_exists(self, object_key: str) -> bool:
@@ -208,10 +208,10 @@ class OSSService:
         """
         try:
             exists = self.bucket.object_exists(object_key)
-            logger.debug(f"File exists check: {object_key} -> {exists}")
+            logger.debug(f"文件存在性检查: {object_key} -> {exists}")
             return exists
         except Exception as e:
-            logger.error(f"Failed to check file existence {object_key}: {e}")
+            logger.error(f"检查文件存在性失败 {object_key}: {e}")
             return False
 
     def get_file_meta(self, object_key: str) -> Dict[str, Any]:
@@ -232,8 +232,8 @@ class OSSService:
                 "etag": meta.headers.get("ETag"),
                 "last_modified": meta.headers.get("Last-Modified"),
             }
-            logger.debug(f"File meta retrieved: {object_key} -> {result}")
+            logger.debug(f"获取文件元信息成功: {object_key} -> {result}")
             return result
         except Exception as e:
-            logger.error(f"Failed to get file meta {object_key}: {e}")
+            logger.error(f"获取文件元信息失败 {object_key}: {e}")
             raise

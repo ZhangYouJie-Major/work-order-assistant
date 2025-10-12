@@ -47,10 +47,6 @@ OPENAI_API_KEY=sk-xxx
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4
 
-# MCP 配置
-MCP_SERVER_URL=http://mcp-server:3000
-MCP_API_KEY=mcp-secret-key
-
 # 阿里云 OSS 配置
 ALIYUN_OSS_ACCESS_KEY_ID=your-access-key-id
 ALIYUN_OSS_ACCESS_KEY_SECRET=your-secret-key

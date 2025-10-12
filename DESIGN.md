@@ -1006,10 +1006,6 @@ OPENAI_API_KEY=sk-xxx
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4
 
-# ============ MCP 配置 ============
-MCP_SERVER_URL=http://mcp-server:3000
-MCP_API_KEY=mcp-secret-key
-
 # ============ 数据库配置 ============
 DATABASE_HOST=localhost
 DATABASE_PORT=3306

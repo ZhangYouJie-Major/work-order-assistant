@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(git rm:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:python.langchain.com)",
+      "WebFetch(domain:langchain-ai.github.io)",
+      "Bash(python tests/test_mutation_steps_service.py)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

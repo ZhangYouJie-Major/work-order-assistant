@@ -7,6 +7,7 @@
 import os
 from pathlib import Path
 from typing import Literal, Optional
+from ..config import settings
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -15,18 +16,20 @@ logger = get_logger(__name__)
 class PromptService:
     """提示词管理服务"""
 
-    def __init__(self, prompts_dir: str = "prompts"):
+    def __init__(self, prompts_dir: Optional[str] = None):
         """
         初始化提示词服务
 
         Args:
-            prompts_dir: 提示词目录路径，默认为 "prompts"
+            prompts_dir: 提示词目录路径，如果不提供则使用配置中的路径
         """
+        if prompts_dir is None:
+            prompts_dir = settings.resource.prompts_dir
         self.prompts_dir = Path(prompts_dir)
         if not self.prompts_dir.exists():
             logger.warning(
-                f"Prompts directory not found: {self.prompts_dir}. "
-                "Will create when loading prompts."
+                f"提示词目录未找到: {self.prompts_dir}. "
+                "加载提示词时将创建。"
             )
 
     def load_intent_recognition_prompt(self) -> str:
@@ -93,7 +96,15 @@ class PromptService:
         }
 
         file_path = file_map.get(mutation_type, "mutation/general_mutation.txt")
-        return self._load_file(file_path)
+
+        # 尝试加载特定文件，如果不存在则回退到通用文件
+        try:
+            return self._load_file(file_path)
+        except FileNotFoundError:
+            logger.warning(
+                f"特定提示词文件 {file_path} 未找到，回退到通用提示词"
+            )
+            return self._load_file("mutation/general_mutation.txt")
 
     def load_context_analysis_prompt(self) -> str:
         """
@@ -120,16 +131,16 @@ class PromptService:
         file_path = self.prompts_dir / relative_path
 
         if not file_path.exists():
-            logger.error(f"Prompt file not found: {file_path}")
+            logger.error(f"提示词文件未找到: {file_path}")
             raise FileNotFoundError(f"Prompt file not found: {file_path}")
 
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                logger.debug(f"Loaded prompt from {relative_path}")
+                logger.debug(f"从 {relative_path} 加载提示词")
                 return content
         except Exception as e:
-            logger.error(f"Failed to load prompt file {file_path}: {e}")
+            logger.error(f"加载提示词文件失败 {file_path}: {e}")
             raise
 
     def list_available_prompts(self) -> dict:

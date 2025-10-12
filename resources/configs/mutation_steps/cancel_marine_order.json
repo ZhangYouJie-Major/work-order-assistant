@@ -1,0 +1,33 @@
+{
+  "work_order_type": "cancel_marine_order",
+  "description": "取消海运单 - 根据入库单号查询并取消关联的海运单",
+  "steps": [
+    {
+      "step": 1,
+      "operation": "QUERY",
+      "table": "t_receipt_order",
+      "where": "receipt_order_no = {receipt_order_no}",
+      "output_fields": ["marine_order_id", "receipt_order_no"]
+    },
+    {
+      "step": 2,
+      "operation": "QUERY",
+      "table": "t_marine_order",
+      "where": "id = {marine_order_id}",
+      "output_fields": ["status", "id", "marine_order_no"]
+    },
+    {
+      "step": 3,
+      "operation": "GENERATE_DML",
+      "type": "UPDATE",
+      "table": "t_marine_order",
+      "set": {
+        "status": "CANCELLED",
+        "updated_at": "NOW()",
+        "cancel_reason": "{cancel_reason}"
+      },
+      "where": "id = {marine_order_id}"
+    }
+  ],
+  "final_sql_template": "UPDATE t_marine_order SET status = 'CANCELLED', updated_at = NOW(), cancel_reason = ? WHERE id = ?"
+}

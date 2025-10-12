@@ -31,7 +31,7 @@ async def send_query_email_node(state: WorkOrderState) -> Dict[str, Any]:
     sql = state.get("sql")
     metadata = state.get("metadata", {})
 
-    logger.info(f"[{task_id}] Starting to send query result email")
+    logger.info(f"[{task_id}] 开始发送查询结果邮件")
 
     try:
         # 获取工单编号
@@ -42,7 +42,7 @@ async def send_query_email_node(state: WorkOrderState) -> Dict[str, Any]:
         rows = query_result.get("rows", [])
         excel_file = ExcelGenerator.generate_from_query_result(columns, rows)
 
-        logger.info(f"[{task_id}] Excel generated: {len(excel_file)} bytes")
+        logger.info(f"[{task_id}] Excel 已生成: {len(excel_file)} 字节")
 
         # 发送邮件
         await email_service.send_query_result_email(
@@ -54,7 +54,7 @@ async def send_query_email_node(state: WorkOrderState) -> Dict[str, Any]:
             excel_file=excel_file,
         )
 
-        logger.info(f"[{task_id}] Query result email sent successfully")
+        logger.info(f"[{task_id}] 查询结果邮件发送成功")
 
         return {
             "email_sent": True,
@@ -62,7 +62,7 @@ async def send_query_email_node(state: WorkOrderState) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"[{task_id}] Failed to send query result email: {e}")
+        logger.error(f"[{task_id}] 发送查询结果邮件失败: {e}")
         return {
             "email_sent": False,
             "error": f"邮件发送失败: {str(e)}",

@@ -40,13 +40,13 @@ class ExcelGenerator:
             excel_bytes = output.read()
 
             logger.info(
-                f"Generated Excel: {len(rows)} rows, {len(columns)} columns"
+                f"生成 Excel: {len(rows)} 行, {len(columns)} 列"
             )
 
             return excel_bytes
 
         except Exception as e:
-            logger.error(f"Failed to generate Excel: {e}")
+            logger.error(f"生成 Excel 失败: {e}")
             raise
 
     @staticmethod
@@ -70,10 +70,10 @@ class ExcelGenerator:
             output.seek(0)
             excel_bytes = output.read()
 
-            logger.info(f"Generated Excel from dict list: {len(data)} rows")
+            logger.info(f"从字典列表生成 Excel: {len(data)} 行")
 
             return excel_bytes
 
         except Exception as e:
-            logger.error(f"Failed to generate Excel from dict list: {e}")
+            logger.error(f"从字典列表生成 Excel 失败: {e}")
             raise

@@ -61,7 +61,7 @@ class LLMService:
                 "reasoning": "分析理由"
             }
         """
-        logger.info("Starting intent recognition")
+        logger.info("开始意图识别")
 
         try:
             # 构建提示词
@@ -85,20 +85,21 @@ class LLMService:
 
             # 调用 LLM
             response = await self.llm.ainvoke(messages)
+            logger.info(f"LLM 输出: {response.content}")
             result_text = response.content
 
             # 解析 JSON 响应
             result = self._parse_json_response(result_text)
 
             logger.info(
-                f"Intent recognized: {result.get('operation_type')} "
-                f"(confidence: {result.get('confidence')})"
+                f"意图识别完成: {result.get('operation_type')} "
+                f"(置信度: {result.get('confidence')})"
             )
 
             return result
 
         except Exception as e:
-            logger.error(f"Failed to recognize intent: {e}")
+            logger.error(f"意图识别失败: {e}")
             raise
 
     async def extract_entities(
@@ -124,7 +125,7 @@ class LLMService:
                 "expected_result": "查询用户最近 7 天的订单信息"
             }
         """
-        logger.info("Starting entity extraction")
+        logger.info("开始实体提取")
 
         try:
             # 构建提示词
@@ -167,14 +168,14 @@ class LLMService:
             result = self._parse_json_response(result_text)
 
             logger.info(
-                f"Entities extracted: tables={result.get('target_tables')}, "
-                f"fields={len(result.get('fields', []))} fields"
+                f"实体提取完成: tables={result.get('target_tables')}, "
+                f"fields={len(result.get('fields', []))} 个字段"
             )
 
             return result
 
         except Exception as e:
-            logger.error(f"Failed to extract entities: {e}")
+            logger.error(f"实体提取失败: {e}")
             raise
 
     async def generate_dml(
@@ -198,7 +199,7 @@ class LLMService:
                 "description": "取消用户 12345 的所有订单"
             }
         """
-        logger.info("Starting DML generation")
+        logger.info("开始生成 DML 语句")
 
         try:
             system_prompt = prompt_template
@@ -232,14 +233,15 @@ class LLMService:
             result = self._parse_json_response(result_text)
 
             logger.info(
-                f"DML generated: {result.get('operation_type')} on "
-                f"{result.get('affected_tables')} (risk: {result.get('risk_level')})"
+                f"DML 生成完成: {result.get('operation_type')} "
+                f"操作表 {result.get('affected_tables')} "
+                f"(风险级别: {result.get('risk_level')})"
             )
 
             return result
 
         except Exception as e:
-            logger.error(f"Failed to generate DML: {e}")
+            logger.error(f"DML 生成失败: {e}")
             raise
 
     async def generate_sql_query(
@@ -255,7 +257,7 @@ class LLMService:
         Returns:
             SQL 查询语句
         """
-        logger.info("Starting SQL query generation")
+        logger.info("开始生成 SQL 查询语句")
 
         try:
             system_prompt = prompt_template
@@ -283,12 +285,12 @@ class LLMService:
             result = self._parse_json_response(result_text)
             sql = result.get("sql", "")
 
-            logger.info(f"SQL query generated: {sql[:100]}...")
+            logger.info(f"SQL 查询生成完成: {sql[:100]}...")
 
             return sql
 
         except Exception as e:
-            logger.error(f"Failed to generate SQL query: {e}")
+            logger.error(f"SQL 查询生成失败: {e}")
             raise
 
     def _parse_json_response(self, response_text: str) -> Dict[str, Any]:

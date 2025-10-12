@@ -43,11 +43,17 @@ class LLMSettings(BaseSettings):
     )
 
 
-class MCPSettings(BaseSettings):
-    """MCP 配置"""
+class MySQLSettings(BaseSettings):
+    """MySQL 数据库配置"""
 
-    mcp_server_url: str = Field(..., alias="MCP_SERVER_URL")
-    mcp_api_key: str = Field(..., alias="MCP_API_KEY")
+    mysql_host: str = Field(default="localhost", alias="MYSQL_HOST")
+    mysql_port: int = Field(default=3306, alias="MYSQL_PORT")
+    mysql_user: str = Field(..., alias="MYSQL_USER")
+    mysql_password: str = Field(..., alias="MYSQL_PASSWORD")
+    mysql_database: str = Field(..., alias="MYSQL_DATABASE")
+    mysql_charset: str = Field(default="utf8mb4", alias="MYSQL_CHARSET")
+    mysql_connection_timeout: int = Field(default=30, alias="MYSQL_CONNECTION_TIMEOUT")
+    mysql_max_retries: int = Field(default=3, alias="MYSQL_MAX_RETRIES")
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
@@ -141,18 +147,34 @@ class WorkflowSettings(BaseSettings):
     )
 
 
+class ResourceSettings(BaseSettings):
+    """资源路径配置"""
+
+    prompts_dir: str = Field(
+        default="resources/prompts", alias="PROMPTS_DIR"
+    )
+    mutation_steps_dir: str = Field(
+        default="resources/configs/mutation_steps", alias="MUTATION_STEPS_DIR"
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
 class Settings:
     """全局配置管理器"""
 
     def __init__(self):
         self.app = AppSettings()
         self.llm = LLMSettings()
-        self.mcp = MCPSettings()
+        self.mysql = MySQLSettings()
         self.oss = OSSSettings()
         self.email = EmailSettings()
         self.async_task = AsyncTaskSettings()
         self.log = LogSettings()
         self.workflow = WorkflowSettings()
+        self.resource = ResourceSettings()
 
 
 # 全局配置实例

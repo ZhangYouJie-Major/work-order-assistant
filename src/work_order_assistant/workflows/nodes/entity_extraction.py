@@ -9,6 +9,7 @@ from ...workflows.state import WorkOrderState
 from ...services.prompt_service import PromptService
 from ...services.llm_service import LLMService
 from ...services.oss_service import OSSService
+from ...services.mutation_steps_service import MutationStepsService
 from ...config import settings
 from ...utils.logger import get_logger
 
@@ -18,6 +19,7 @@ logger = get_logger(__name__)
 prompt_service = PromptService()
 llm_service = LLMService(settings.llm)
 oss_service = OSSService(settings.oss)
+mutation_steps_service = MutationStepsService()
 
 
 async def entity_extraction_node(state: WorkOrderState) -> Dict[str, Any]:
@@ -35,13 +37,13 @@ async def entity_extraction_node(state: WorkOrderState) -> Dict[str, Any]:
     operation_type = state.get("operation_type")
     oss_attachments = state.get("oss_attachments", [])
 
-    logger.info(f"[{task_id}] Starting entity extraction (type: {operation_type})")
+    logger.info(f"[{task_id}] 开始实体提取 (类型: {operation_type})")
 
     try:
         # 处理 OSS 附件（如果有）
         attachment_data = None
         if oss_attachments:
-            logger.info(f"[{task_id}] Processing {len(oss_attachments)} attachments")
+            logger.info(f"[{task_id}] 处理 {len(oss_attachments)} 个附件")
             attachment_data = await _process_attachments(task_id, oss_attachments)
 
         # 加载实体提取提示词
@@ -53,17 +55,38 @@ async def entity_extraction_node(state: WorkOrderState) -> Dict[str, Any]:
         )
 
         logger.info(
-            f"[{task_id}] Entities extracted: tables={entities.get('target_tables')}"
+            f"[{task_id}] 实体提取完成: tables={entities.get('target_tables')}"
         )
+
+        # 如果是 mutation 类型，加载查询步骤配置
+        query_steps_config = None
+        work_order_subtype = None
+
+        if operation_type == "mutation":
+            # 尝试从 entities 中获取工单子类型
+            work_order_subtype = entities.get("work_order_subtype")
+
+            if work_order_subtype:
+                logger.info(f"[{task_id}] 为 {work_order_subtype} 加载变更步骤配置")
+                query_steps_config = mutation_steps_service.load_config(work_order_subtype)
+
+                if query_steps_config:
+                    logger.info(f"[{task_id}] 为 {work_order_subtype} 加载了 {len(query_steps_config.get('steps', []))} 个步骤")
+                else:
+                    logger.warning(f"[{task_id}] 未找到 {work_order_subtype} 的配置，将使用默认 DML 生成")
+            else:
+                logger.warning(f"[{task_id}] 未指定 work_order_subtype，将使用默认 DML 生成")
 
         return {
             "entities": entities,
             "attachment_parsed_data": attachment_data,
+            "query_steps_config": query_steps_config,
+            "work_order_subtype": work_order_subtype,
             "current_node": "entity_extraction",
         }
 
     except Exception as e:
-        logger.error(f"[{task_id}] Entity extraction failed: {e}")
+        logger.error(f"[{task_id}] 实体提取失败: {e}")
         return {
             "entities": None,
             "error": f"实体提取失败: {str(e)}",
@@ -92,7 +115,7 @@ async def _process_attachments(
             mime_type = attachment.get("mime_type")
             filename = attachment.get("filename")
 
-            logger.info(f"[{task_id}] Parsing attachment: {filename}")
+            logger.info(f"[{task_id}] 解析附件: {filename}")
 
             parsed_data = oss_service.parse_attachment(url, mime_type)
             parsed_attachments.append(
@@ -101,7 +124,7 @@ async def _process_attachments(
 
         except Exception as e:
             logger.warning(
-                f"[{task_id}] Failed to parse attachment {filename}: {e}"
+                f"[{task_id}] 解析附件失败 {filename}: {e}"
             )
             # 继续处理其他附件
 

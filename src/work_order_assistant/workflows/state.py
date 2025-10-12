@@ -51,6 +51,16 @@ class WorkOrderState(TypedDict, total=False):
     email_sent: Optional[bool]
     """邮件是否已发送"""
 
+    # ============ Mutation 多步骤查询 ============
+    query_steps_config: Optional[dict]
+    """多步骤查询配置（用于 mutation 类型）"""
+
+    query_steps_result: Optional[dict]
+    """多步骤查询结果（用于 mutation 类型）"""
+
+    work_order_subtype: Optional[str]
+    """工单子类型（如 cancel_marine_order, update_quotation）"""
+
     # ============ 错误信息 ============
     error: Optional[str]
     """错误信息"""

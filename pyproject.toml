@@ -36,6 +36,9 @@ dependencies = [
 
     # 工具库
     "python-dotenv>=1.0.0",
+
+    # 数据库
+    "mysql-connector-python>=8.0.0",
 ]
 
 [project.optional-dependencies]
