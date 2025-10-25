@@ -13,34 +13,37 @@ from datetime import datetime
 
 
 class JSONFormatter(logging.Formatter):
-    """JSON 格式日志格式化器"""
+    """JSON 格式日志格式化器（简化版）"""
 
     def format(self, record: logging.LogRecord) -> str:
+        # 简化时间戳：只保留时分秒
+        timestamp = datetime.utcnow().strftime("%H:%M:%S")
+
+        # 简化日志级别
+        level_short = {
+            "DEBUG": "DBG",
+            "INFO": "INF",
+            "WARNING": "WRN",
+            "ERROR": "ERR",
+            "CRITICAL": "CRT"
+        }.get(record.levelname, record.levelname[:3])
+
+        # 简化模块名（只保留最后一段）
+        module_short = record.name.split('.')[-1]
+
         log_data = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
+            "time": timestamp,
+            "lvl": level_short,
+            "msg": record.getMessage(),
         }
 
         # 添加额外字段
         if hasattr(record, "task_id"):
-            log_data["task_id"] = record.task_id
-        if hasattr(record, "user"):
-            log_data["user"] = record.user
-        if hasattr(record, "operation"):
-            log_data["operation"] = record.operation
-        if hasattr(record, "status"):
-            log_data["status"] = record.status
-        if hasattr(record, "duration_ms"):
-            log_data["duration_ms"] = record.duration_ms
+            log_data["task"] = record.task_id
 
-        # 添加异常信息
+        # 添加异常信息（简化）
         if record.exc_info:
-            log_data["exception"] = self.formatException(record.exc_info)
+            log_data["error"] = str(record.exc_info[1])
 
         return json.dumps(log_data, ensure_ascii=False)
 

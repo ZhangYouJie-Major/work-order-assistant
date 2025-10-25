@@ -6,7 +6,7 @@ Mutation 步骤配置服务
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from ..config import settings
 from ..utils.logger import get_logger
 
@@ -157,3 +157,130 @@ class MutationStepsService:
 
         logger.warning("配置中未找到 GENERATE_DML 步骤")
         return None
+
+    def load_all_configs(self) -> List[Dict[str, Any]]:
+        """
+        加载所有可用的配置文件
+
+        Returns:
+            配置列表，每个配置包含 work_order_type, description 和完整配置
+        """
+        configs = []
+
+        if not self.config_dir.exists():
+            logger.warning(f"配置目录未找到: {self.config_dir}")
+            return configs
+
+        for config_file in self.config_dir.glob("*.json"):
+            # 排除 schema.json
+            if config_file.stem == "schema":
+                continue
+
+            try:
+                with open(config_file, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+
+                configs.append({
+                    "work_order_type": config.get("work_order_type", config_file.stem),
+                    "description": config.get("description", ""),
+                    "config": config
+                })
+
+            except Exception as e:
+                logger.error(f"加载配置文件失败 {config_file}: {e}")
+                continue
+
+        logger.info(f"加载了 {len(configs)} 个配置文件")
+        return configs
+
+    async def match_config_by_content(
+        self,
+        work_order_content: str,
+        llm_service: Any
+    ) -> Optional[Tuple[str, Dict[str, Any]]]:
+        """
+        根据工单内容智能匹配最合适的配置
+
+        Args:
+            work_order_content: 工单内容
+            llm_service: LLM 服务实例
+
+        Returns:
+            (work_order_type, config) 元组，如果没有匹配则返回 None
+        """
+        configs = self.load_all_configs()
+
+        if not configs:
+            logger.warning("没有可用的配置文件")
+            return None
+
+        # 构建匹配提示词
+        descriptions = []
+        for idx, cfg in enumerate(configs):
+            descriptions.append(
+                f"{idx + 1}. {cfg['work_order_type']}: {cfg['description']}"
+            )
+
+        system_prompt = "你是一个工单分类专家。请根据工单内容，从以下配置中选择最匹配的一个。"
+
+        user_prompt = f"""工单内容：
+{work_order_content}
+
+可选配置：
+{chr(10).join(descriptions)}
+
+请仔细分析工单内容，判断它最符合哪个配置的描述。
+
+输出格式（JSON）：
+{{
+    "matched_index": 匹配的配置序号（1-{len(configs)}），如果都不匹配则为 0,
+    "confidence": 置信度（0.0-1.0）,
+    "reasoning": "匹配理由"
+}}
+"""
+
+        try:
+            # 使用 LLMService 的正确调用方式
+            from langchain_core.messages import HumanMessage, SystemMessage
+
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ]
+
+            # 调用 LLM
+            response = await llm_service.llm.ainvoke(messages)
+            result_text = response.content
+
+            logger.info(f"配置匹配 LLM 输出: {result_text}")
+
+            # 解析响应
+            import re
+            json_match = re.search(r'```json\s*(.*?)\s*```', result_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group(1))
+            else:
+                result = json.loads(result_text)
+
+            matched_index = result.get("matched_index", 0)
+            confidence = result.get("confidence", 0.0)
+            reasoning = result.get("reasoning", "")
+
+            logger.info(f"配置匹配结果: index={matched_index}, confidence={confidence}")
+            logger.info(f"匹配理由: {reasoning}")
+
+            # 如果匹配到了配置且置信度足够高
+            if matched_index > 0 and matched_index <= len(configs) and confidence >= 0.7:
+                matched_config = configs[matched_index - 1]
+                work_order_type = matched_config["work_order_type"]
+
+                logger.info(f"成功匹配配置: {work_order_type} (置信度: {confidence})")
+
+                return (work_order_type, matched_config["config"])
+            else:
+                logger.warning(f"未找到匹配的配置 (matched_index={matched_index}, confidence={confidence})")
+                return None
+
+        except Exception as e:
+            logger.error(f"配置匹配失败: {e}", exc_info=True)
+            return None
