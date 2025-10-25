@@ -538,6 +538,9 @@ class WorkOrderState(TypedDict):
     # 处理过程中的状态
     operation_type: Optional[Literal["query", "mutation"]]
     entities: Optional[dict]
+    query_steps_config: Optional[dict]  # 新增：mutation 步骤配置
+    query_steps_result: Optional[dict]  # 新增：多步骤查询结果
+    work_order_subtype: Optional[str]   # 新增：工单子类型
     sql: Optional[str]
     query_result: Optional[dict]
     dml_info: Optional[dict]
@@ -551,11 +554,11 @@ def create_work_order_workflow():
     # 添加节点
     workflow.add_node("intent_recognition", intent_recognition_node)
     workflow.add_node("entity_extraction", entity_extraction_node)
-    workflow.add_node("mcp_query", mcp_query_node)
+    workflow.add_node("sql_query", sql_query_node)
+    workflow.add_node("multi_step_query", multi_step_query_node)  # 新增
     workflow.add_node("generate_dml", generate_dml_node)
     workflow.add_node("send_query_email", send_query_email_node)
     workflow.add_node("send_dml_email", send_dml_email_node)
-    workflow.add_node("handle_error", handle_error_node)
 
     # 设置入口
     workflow.set_entry_point("intent_recognition")
@@ -568,27 +571,260 @@ def create_work_order_workflow():
         "entity_extraction",
         lambda state: state.get("operation_type", "unknown"),
         {
-            "query": "mcp_query",
-            "mutation": "generate_dml",
-            "unknown": "handle_error"
+            "query": "sql_query",
+            "mutation": "multi_step_query",  # 变更路径走多步骤查询
+            "unknown": END
         }
     )
 
-    # 查询 → 发送查询邮件 → 结束
-    workflow.add_edge("mcp_query", "send_query_email")
+    # 查询路径：SQL查询 → 发送查询邮件 → 结束
+    workflow.add_edge("sql_query", "send_query_email")
     workflow.add_edge("send_query_email", END)
 
-    # 变更 → 发送 DML 邮件 → 结束
+    # 变更路径：多步骤查询 → 生成DML → 打印DML → 结束
+    workflow.add_edge("multi_step_query", "generate_dml")
     workflow.add_edge("generate_dml", "send_dml_email")
     workflow.add_edge("send_dml_email", END)
-
-    # 错误处理 → 结束
-    workflow.add_edge("handle_error", END)
 
     return workflow.compile()
 ```
 
-### 5.2 提示词加载策略
+### 5.2 Mutation Steps 配置服务（核心创新）
+
+这是本系统的**核心创新点**，通过配置化的方式管理不同类型的数据变更操作。
+
+#### 5.2.1 配置文件格式
+
+```json
+{
+  "work_order_type": "update_telco_customer",
+  "description": "电信客户数据表-根据客户唯一标识ID更新月费金额。入参的customerID是客户id，new_price是月费金额",
+  "steps": [
+    {
+      "step": 1,
+      "operation": "QUERY",
+      "table": "telco_customer",
+      "where": "customerID = {customerID}",
+      "output_fields": ["customerID"]
+    },
+    {
+      "step": 2,
+      "operation": "GENERATE_DML",
+      "type": "UPDATE",
+      "table": "telco_customer",
+      "set": {
+        "MonthlyCharges": "{new_price}"
+      },
+      "where": "customerID = {customerID}"
+    }
+  ],
+  "final_sql_template": "UPDATE telco_customer SET MonthlyCharges = ? WHERE customerID = ?"
+}
+```
+
+#### 5.2.2 MutationStepsService 实现
+
+```python
+class MutationStepsService:
+    """Mutation 步骤配置服务"""
+
+    def __init__(self, config_dir: str):
+        self.config_dir = Path(config_dir)
+        self._config_cache = {}
+
+    def load_config(self, work_order_type: str) -> Optional[Dict[str, Any]]:
+        """加载指定工单类型的配置"""
+        config_file = self.config_dir / f"{work_order_type}.json"
+
+        if not config_file.exists():
+            return None
+
+        with open(config_file, "r", encoding="utf-8") as f:
+            config = json.load(f)
+
+        self._config_cache[work_order_type] = config
+        return config
+
+    async def match_config_by_content(
+        self,
+        work_order_content: str,
+        llm_service: Any
+    ) -> Optional[Tuple[str, Dict[str, Any]]]:
+        """
+        智能匹配配置文件（核心功能）
+
+        1. 加载所有配置文件的 description
+        2. 使用 LLM 根据工单内容匹配最合适的配置
+        3. 返回匹配的配置类型和完整配置
+        """
+        configs = self.load_all_configs()
+
+        # 构建 LLM 提示词
+        descriptions = []
+        for idx, cfg in enumerate(configs):
+            descriptions.append(
+                f"{idx + 1}. {cfg['work_order_type']}: {cfg['description']}"
+            )
+
+        prompt = f"""根据工单内容，选择最匹配的配置。
+
+工单内容：
+{work_order_content}
+
+可选配置：
+{chr(10).join(descriptions)}
+
+输出 JSON：
+{{
+    "matched_index": 匹配的配置序号（1-{len(configs)}），
+    "confidence": 置信度（0.0-1.0）,
+    "reasoning": "匹配理由"
+}}
+"""
+
+        # 调用 LLM
+        result = await llm_service.llm.ainvoke([HumanMessage(content=prompt)])
+        matched_data = json.loads(result.content)
+
+        if matched_data["confidence"] >= 0.7:
+            matched_config = configs[matched_data["matched_index"] - 1]
+            return (matched_config["work_order_type"], matched_config["config"])
+
+        return None
+
+    def load_all_configs(self) -> List[Dict[str, Any]]:
+        """加载所有配置文件"""
+        configs = []
+        for config_file in self.config_dir.glob("*.json"):
+            if config_file.stem == "schema":
+                continue
+
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+
+            configs.append({
+                "work_order_type": config.get("work_order_type"),
+                "description": config.get("description"),
+                "config": config
+            })
+
+        return configs
+```
+
+#### 5.2.3 工作流程
+
+1. **意图识别** → mutation
+2. **智能配置匹配**
+   - LLM 根据工单内容分析匹配最佳配置
+   - 置信度 >= 0.7 则使用该配置
+3. **参数提取**
+   - 根据配置的 description 提取所需参数
+   - 例如：`customerID`, `new_price`
+4. **多步骤查询**
+   - 执行配置中的 QUERY 步骤
+   - 验证数据存在性
+   - 将查询结果传递到下一步
+5. **DML 生成**
+   - 基于配置的 GENERATE_DML 步骤
+   - 替换变量占位符 `{customerID}`, `{new_price}`
+   - 生成完整的 SQL 语句
+6. **输出 DML**
+   - 执行 SQL（带实际值）
+   - SQL 模板（参数化查询，使用 `?`）
+   - 参数列表
+
+### 5.3 简化的日志格式
+
+```python
+class JSONFormatter(logging.Formatter):
+    """简化的 JSON 日志格式"""
+
+    def format(self, record: logging.LogRecord) -> str:
+        # 只保留核心字段
+        log_data = {
+            "time": datetime.utcnow().strftime("%H:%M:%S"),  # 只保留时分秒
+            "lvl": self._short_level(record.levelname),      # INF/WRN/ERR
+            "msg": record.getMessage(),
+        }
+        return json.dumps(log_data, ensure_ascii=False)
+
+    def _short_level(self, level: str) -> str:
+        return {
+            "DEBUG": "DBG",
+            "INFO": "INF",
+            "WARNING": "WRN",
+            "ERROR": "ERR",
+            "CRITICAL": "CRT"
+        }.get(level, level[:3])
+```
+
+**日志示例**：
+```json
+{"time": "15:15:04", "lvl": "INF", "msg": "[task-xxx] 工单已接收"}
+```
+
+**对比传统格式**：
+```json
+// 之前（冗长）
+{"timestamp": "2025-10-25T15:15:04.814822Z", "level": "INFO", "logger": "work_order_assistant.api.routes.work_order", "message": "[task-xxx] 工单已接收", "module": "work_order", "function": "submit_work_order", "line": 45}
+
+// 现在（简洁）
+{"time": "15:15:04", "lvl": "INF", "msg": "[task-xxx] 工单已接收"}
+```
+
+### 5.4 DML 输出格式
+
+```python
+async def send_dml_email_node(state: WorkOrderState):
+    """打印 DML 信息（完整格式）"""
+
+    dml_info = state.get("dml_info")
+    query_steps_config = state.get("query_steps_config")
+
+    # 1. 执行 SQL（带实际值）
+    sql = dml_info.get("sql")
+    logger.info(f"【执行 SQL】: {sql}")
+    # 示例：UPDATE telco_customer SET MonthlyCharges = '80' WHERE customerID = '0002-ORFBO'
+
+    # 2. SQL 模板（参数化查询）
+    if query_steps_config:
+        final_sql_template = query_steps_config.get("final_sql_template")
+        logger.info(f"【SQL 模板】: {final_sql_template}")
+        # 示例：UPDATE telco_customer SET MonthlyCharges = ? WHERE customerID = ?
+
+        # 3. 参数列表
+        context = dml_info.get("context", {})
+        logger.info("【参数】:")
+        for key, value in context.items():
+            logger.info(f"  {key} = {value}")
+        # 示例：
+        #   customerID = 0002-ORFBO
+        #   new_price = 80
+```
+
+**完整输出示例**：
+```
+============================================================
+生成的 DML 语句
+============================================================
+操作类型: UPDATE
+涉及表: ['telco_customer']
+风险级别: low
+------------------------------------------------------------
+【执行 SQL】:
+  UPDATE telco_customer SET MonthlyCharges = '80' WHERE customerID = '0002-ORFBO'
+------------------------------------------------------------
+【SQL 模板】(使用参数化查询):
+  UPDATE telco_customer SET MonthlyCharges = ? WHERE customerID = ?
+【参数】:
+  customerID = 0002-ORFBO
+  new_price = 80
+------------------------------------------------------------
+说明: UPDATE telco_customer
+============================================================
+```
+
+### 5.5 提示词加载策略
 
 ```python
 class PromptService:
@@ -625,41 +861,54 @@ class PromptService:
             return f.read()
 ```
 
-### 5.3 MCP 服务集成
+### 5.6 SQL 执行工具
 
 ```python
-from mcp import MCPClient
+from langchain.tools import tool
 
-class MCPService:
-    """MCP 工具服务"""
+@tool
+async def query_mysql(sql: str) -> dict:
+    """
+    执行只读 SQL 查询
 
-    def __init__(self, server_url: str, api_key: str):
-        self.client = MCPClient(server_url, api_key)
+    Args:
+        sql: SQL 查询语句
 
-    async def execute_query(self, sql: str, params: dict = None) -> dict:
-        """
-        执行只读 SQL 查询
-
-        返回: {
-            "columns": ["col1", "col2"],
-            "rows": [[val1, val2], ...],
-            "row_count": 10
+    Returns: {
+        "columns": ["col1", "col2"],
+        "rows": [[val1, val2], ...],
+        "row_count": 10,
+        "success": True
+    }
+    """
+    # 验证 SQL 是否为只读查询
+    if not sql.strip().upper().startswith("SELECT"):
+        return {
+            "success": False,
+            "error": "只允许执行 SELECT 查询"
         }
-        """
-        # 验证 SQL 是否为只读查询
-        if not self._is_readonly_query(sql):
-            raise ValueError("只允许执行 SELECT 查询")
 
-        result = await self.client.query(sql, params)
-        return result
+    # 连接数据库并执行查询
+    connection = mysql.connector.connect(...)
+    cursor = connection.cursor()
 
-    def _is_readonly_query(self, sql: str) -> bool:
-        """验证是否为只读查询"""
-        sql_upper = sql.strip().upper()
-        return sql_upper.startswith("SELECT")
+    try:
+        cursor.execute(sql)
+        columns = [desc[0] for desc in cursor.description]
+        rows = cursor.fetchall()
+
+        return {
+            "columns": columns,
+            "rows": rows,
+            "row_count": len(rows),
+            "success": True
+        }
+    finally:
+        cursor.close()
+        connection.close()
 ```
 
-### 5.4 OSS 下载服务（阿里云 OSS）
+### 5.7 OSS 下载服务（阿里云 OSS）
 
 ```python
 import oss2
@@ -800,7 +1049,7 @@ class OSSService:
         }
 ```
 
-### 5.5 邮件服务
+### 5.8 邮件服务
 
 ```python
 import aiosmtplib
@@ -1290,23 +1539,56 @@ workflow.add_edge("entity_extraction", "custom_processing")
 
 1. **异步处理架构**：接口立即返回，后台异步处理，提升响应速度
 2. **LangGraph 工作流**：清晰的状态机模型，易于理解和维护
-3. **智能邮件通知**：自动将处理结果发送给相关人员，无需人工干预
-4. **提示词工程**：针对不同场景的专用提示词，提升准确性
-5. **安全可控**：查询自动执行，变更需人工审核
+3. **配置化变更管理**：通过 JSON 配置文件管理不同类型的数据变更操作
+4. **智能配置匹配**：LLM 自动匹配最佳配置，无需人工指定工单类型
+5. **多步骤查询**：支持复杂的数据验证流程，确保变更安全性
+6. **安全可控**：查询自动执行，变更生成 DML 供人工审核
 
 ### 技术亮点
 
-- 使用 LangGraph 而非传统 Agent，流程控制更清晰
-- OSS 附件下载和解析，支持多种文件格式
-- Excel 附件生成查询结果，便于查看
-- HTML 邮件模板，SQL 语法高亮
-- 支持状态持久化和错误恢复
+- **核心创新：Mutation Steps 配置化管理**
+  - 每种变更类型一个配置文件
+  - 包含：description、查询步骤、DML 模板
+  - LLM 智能匹配 + 参数自动提取
+  - 支持多步骤查询验证数据存在性
+
+- **简化的日志格式**
+  - 只保留核心字段（time, lvl, msg）
+  - 大幅减少日志体积，提升可读性
+
+- **完整的 DML 输出**
+  - 执行 SQL（带实际值）
+  - SQL 模板（参数化查询）
+  - 参数列表
+  - 便于审核和执行
+
+- **其他特性**
+  - OSS 附件下载和解析，支持多种文件格式
+  - Excel 附件生成查询结果，便于查看
+  - 支持状态持久化和错误恢复
+
+### 创新点总结
+
+1. **配置驱动的变更管理**
+   - 不再依赖提示词工程
+   - 配置文件即文档，易于维护
+   - 新增变更类型只需添加 JSON 配置
+
+2. **LLM 智能匹配机制**
+   - 根据工单内容自动匹配配置
+   - 自动提取配置所需参数
+   - 置信度控制，确保准确性
+
+3. **多步骤查询验证**
+   - 执行前先查询验证数据
+   - 步骤间上下文传递
+   - 支持复杂的业务逻辑
 
 ### 下一步行动
 
 按照开发路线图逐步实施：
-1. 搭建基础架构和 FastAPI 接口
-2. 实现 LangGraph 核心工作流
-3. 集成 MCP、邮件、OSS 服务
+1. 搭建基础架构和 FastAPI 接口 ✅
+2. 实现 LangGraph 核心工作流 ✅
+3. 集成智能配置匹配和多步骤查询 ✅
 4. 完善提示词库和错误处理
 5. 测试、优化、上线
