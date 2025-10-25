@@ -274,7 +274,8 @@ work-order-assistant/
 │       │   │   ├── __init__.py
 │       │   │   ├── intent_recognition.py    # 意图识别节点
 │       │   │   ├── entity_extraction.py     # 实体提取节点
-│       │   │   ├── mcp_query.py             # MCP 查询节点
+│       │   │   ├── sql_query.py             # SQL 查询节点
+│       │   │   ├── multi_step_query.py      # 多步骤查询节点
 │       │   │   ├── generate_dml.py          # DML 生成节点
 │       │   │   ├── send_query_email.py      # 发送查询邮件节点
 │       │   │   └── send_dml_email.py        # 发送 DML 邮件节点
@@ -283,10 +284,14 @@ work-order-assistant/
 │       ├── services/           # 业务逻辑层
 │       │   ├── __init__.py
 │       │   ├── llm_service.py          # LLM 服务
-│       │   ├── mcp_service.py          # MCP 工具服务
 │       │   ├── oss_service.py          # OSS 下载服务
 │       │   ├── prompt_service.py       # 提示词管理服务
-│       │   └── email_service.py        # 邮件服务
+│       │   ├── email_service.py        # 邮件服务
+│       │   └── mutation_steps_service.py  # Mutation 步骤配置服务
+│       │
+│       ├── tools/              # 工具层
+│       │   ├── __init__.py
+│       │   └── sql_tool.py             # SQL 执行工具
 │       │
 │       ├── models/             # 数据模型
 │       │   ├── __init__.py
@@ -295,31 +300,38 @@ work-order-assistant/
 │       │
 │       └── utils/              # 工具函数
 │           ├── __init__.py
-│           ├── logger.py               # 日志工具
+│           ├── logger.py               # 日志工具（简化 JSON 格式）
 │           ├── validators.py           # 验证器
 │           └── excel_generator.py      # Excel 生成工具
 │
-├── prompts/                    # 提示词模板目录
-│   ├── base/
-│   │   ├── intent_recognition.txt      # 意图识别
-│   │   ├── entity_extraction.txt       # 实体提取
-│   │   └── context_analysis.txt        # 上下文分析
+├── resources/                  # 资源文件目录
+│   ├── prompts/                # 提示词模板目录
+│   │   ├── base/
+│   │   │   ├── intent_recognition.txt      # 意图识别
+│   │   │   ├── entity_extraction.txt       # 实体提取
+│   │   │   └── context_analysis.txt        # 上下文分析
+│   │   │
+│   │   ├── query/              # 查询类工单
+│   │   │   ├── user_query.txt              # 用户查询
+│   │   │   ├── order_query.txt             # 订单查询
+│   │   │   └── log_query.txt               # 日志查询
+│   │   │
+│   │   └── mutation/           # 变更类工单
+│   │       ├── data_update.txt             # 数据更新
+│   │       ├── data_insert.txt             # 数据插入
+│   │       └── data_delete.txt             # 数据删除
 │   │
-│   ├── query/                  # 查询类工单
-│   │   ├── user_query.txt              # 用户查询
-│   │   ├── order_query.txt             # 订单查询
-│   │   └── log_query.txt               # 日志查询
-│   │
-│   └── mutation/               # 变更类工单
-│       ├── data_update.txt             # 数据更新
-│       ├── data_insert.txt             # 数据插入
-│       └── data_delete.txt             # 数据删除
+│   └── configs/                # 配置文件目录
+│       └── mutation_steps/     # 变更步骤配置（重要）
+│           ├── schema.json                 # 配置文件 Schema
+│           ├── update_telco_customer.json  # 更新电信客户示例
+│           └── cancel_marine_order.json    # 取消海运单示例
 │
 ├── tests/                      # 测试目录
 │   ├── __init__.py
 │   ├── test_api/
 │   ├── test_services/
-│   └── test_agents/
+│   └── test_workflows/
 │
 └── logs/                       # 日志目录
     └── .gitkeep
