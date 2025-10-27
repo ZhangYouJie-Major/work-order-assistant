@@ -4,9 +4,15 @@
 使用 Pydantic Settings 管理环境变量配置
 """
 
+import os
 from typing import List, Literal, Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv
+
+# 在所有配置类之前加载 .env 到 os.environ
+# 这样 LangSmith 等第三方库可以直接从 os.environ 读取配置
+load_dotenv()
 
 
 class AppSettings(BaseSettings):
