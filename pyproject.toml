@@ -8,47 +8,48 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     # FastAPI 核心
-    "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic[email]>=2.5.0",
-    "pydantic-settings>=2.1.0",
-    "python-multipart>=0.0.6",
+    "fastapi>=0.119.1",
+    "uvicorn[standard]>=0.38.0",
+    "pydantic[email]>=2.12.3",
+    "pydantic-settings>=2.11.0",
+    "python-multipart>=0.0.20",
 
     # LangChain 生态
-    "langchain>=0.2.16",
-    "langchain-core>=0.2.38",
-    "langchain-community>=0.2.16",
-    "langchain-openai>=0.1.23",
-    "langgraph>=0.2.0",
+    "langchain>=0.3.27",
+    "langchain-core>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-openai>=0.3.33",
+    "langchain-anthropic>=0.3.20",
+    "langgraph>=0.6.7",
 
     # HTTP 客户端
-    "httpx>=0.25.0",
+    "httpx>=0.28.1",
 
     # 阿里云 OSS
-    "oss2>=2.18.0",
+    "oss2>=2.19.0",
 
     # 邮件发送
-    "aiosmtplib>=3.0.0",
+    "aiosmtplib>=5.0.0",
 
     # Excel 处理
-    "openpyxl>=3.1.0",
-    "pandas>=2.1.0",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.3",
 
     # 工具库
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=1.2.1",
 
     # 数据库
-    "mysql-connector-python>=8.0.0",
+    "mysql-connector-python>=9.5.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.4.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.1.0",
-    "black>=23.11.0",
-    "ruff>=0.1.0",
-    "mypy>=1.7.0",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
+    "black>=25.9.0",
+    "ruff>=0.14.2",
+    "mypy>=1.18.2",
 ]
 
 [build-system]
