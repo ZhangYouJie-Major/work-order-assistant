@@ -29,6 +29,7 @@ async def send_dml_email_node(state: WorkOrderState) -> Dict[str, Any]:
     dml_info = state.get("dml_info")
     metadata = state.get("metadata", {})
     query_steps_config = state.get("query_steps_config")
+    content = state.get("content", "")  # 获取工单原始内容
 
     logger.info(f"[{task_id}] 开始发送 DML 审核邮件")
 
@@ -76,32 +77,31 @@ async def send_dml_email_node(state: WorkOrderState) -> Dict[str, Any]:
         logger.info(f"[{task_id}] 说明: {dml_info.get('description', '')}")
         logger.info(f"[{task_id}] " + "=" * 60)
 
-        # ===== 暂时跳过邮件发送（SMTP 未配置）=====
-        logger.warning(f"[{task_id}] 跳过邮件发送（SMTP 未配置），仅打印 DML")
-
+        # ===== 发送邮件 =====
         # 获取工单编号
-        # ticket_id = metadata.get("ticket_id", task_id)
+        ticket_id = metadata.get("ticket_id", task_id)
 
         # 获取运维团队邮箱
-        # ops_emails = settings.email.email_ops_team
-        # if isinstance(ops_emails, str):
-        #     ops_emails = [email.strip() for email in ops_emails.split(",")]
+        ops_emails = settings.email.email_ops_team
+        if isinstance(ops_emails, str):
+            ops_emails = [email.strip() for email in ops_emails.split(",")]
 
-        # logger.info(f"[{task_id}] 发送 DML 邮件到运维: {ops_emails}")
+        logger.info(f"[{task_id}] 发送 DML 邮件到运维: {ops_emails}")
 
         # 发送邮件
-        # await email_service.send_dml_review_email(
-        #     to_emails=ops_emails,
-        #     cc_emails=cc_emails,
-        #     task_id=task_id,
-        #     ticket_id=ticket_id,
-        #     dml_info=dml_info,
-        # )
+        await email_service.send_dml_review_email(
+            to_emails=ops_emails,
+            cc_emails=cc_emails,
+            task_id=task_id,
+            ticket_id=ticket_id,
+            dml_info=dml_info,
+            work_order_content=content,
+        )
 
-        logger.info(f"[{task_id}] DML 处理完成（未发送邮件）")
+        logger.info(f"[{task_id}] DML 邮件发送成功")
 
         return {
-            "email_sent": True,  # 标记为已完成，避免工作流失败
+            "email_sent": True,
             "current_node": "send_dml_email",
         }
 

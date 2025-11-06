@@ -103,6 +103,7 @@ class EmailService:
         task_id: str,
         ticket_id: str,
         dml_info: Dict[str, Any],
+        work_order_content: str = "",
     ) -> None:
         """
         发送 DML 审核邮件
@@ -113,6 +114,7 @@ class EmailService:
             task_id: 任务 ID
             ticket_id: 工单编号
             dml_info: DML 信息
+            work_order_content: 工单原始内容
         """
         logger.info(f"发送 DML 审核邮件 (任务 {task_id})")
 
@@ -120,6 +122,15 @@ class EmailService:
 
         risk_color = self._get_risk_color(dml_info.get("risk_level", "medium"))
         highlighted_sql = self._highlight_sql(dml_info.get("sql", ""))
+
+        # 构建工单内容部分
+        work_order_content_html = ""
+        if work_order_content:
+            # 将工单内容转义，防止 HTML 注入
+            import html
+            escaped_content = html.escape(work_order_content)
+            work_order_content_html = f"""<p><strong>工单内容:</strong></p>
+            <div style="background: #fff; padding: 10px; border-left: 3px solid #007bff; margin-top: 10px; white-space: pre-wrap;">{escaped_content}</div>"""
 
         html_body = f"""
 <!DOCTYPE html>
@@ -144,6 +155,7 @@ class EmailService:
         <div class="info">
             <p><strong>任务 ID:</strong> {task_id}</p>
             <p><strong>工单编号:</strong> {ticket_id}</p>
+            {work_order_content_html}
         </div>
 
         <h4>待执行的 SQL:</h4>
@@ -184,6 +196,8 @@ class EmailService:
         Returns:
             带高亮的 HTML
         """
+        import re
+
         keywords = [
             "SELECT",
             "FROM",
@@ -208,16 +222,13 @@ class EmailService:
         ]
 
         highlighted = sql
+        # 使用正则表达式，确保只匹配完整的单词（词边界）
         for kw in keywords:
-            highlighted = highlighted.replace(
-                kw,
-                f'<span style="color: #0066cc; font-weight: bold;">{kw}</span>',
-            )
-            # 也处理小写
-            highlighted = highlighted.replace(
-                kw.lower(),
-                f'<span style="color: #0066cc; font-weight: bold;">{kw.lower()}</span>',
-            )
+            # 使用 \b 词边界匹配，避免匹配到子字符串
+            # re.IGNORECASE 同时处理大小写
+            pattern = r'\b' + re.escape(kw) + r'\b'
+            replacement = f'<span style="color: #0066cc; font-weight: bold;">{kw}</span>'
+            highlighted = re.sub(pattern, replacement, highlighted, flags=re.IGNORECASE)
 
         return highlighted
 

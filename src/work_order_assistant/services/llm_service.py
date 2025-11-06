@@ -38,8 +38,8 @@ class LLMService:
         """
         return ChatOpenAI(
             model=self.settings.openai_model,
-            openai_api_key=self.settings.openai_api_key,
-            openai_api_base=self.settings.openai_base_url,
+            api_key=self.settings.openai_api_key,
+            base_url=self.settings.openai_base_url,
             temperature=0.0,  # 使用确定性输出
         )
 

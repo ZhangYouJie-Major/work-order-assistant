@@ -301,6 +301,7 @@ work-order-assistant/
 │       └── utils/              # 工具函数
 │           ├── __init__.py
 │           ├── logger.py               # 日志工具（简化 JSON 格式）
+│           ├── condition_evaluator.py  # 条件表达式求值器
 │           ├── validators.py           # 验证器
 │           └── excel_generator.py      # Excel 生成工具
 │
@@ -595,6 +596,8 @@ def create_work_order_workflow():
 
 #### 5.2.1 配置文件格式
 
+**基础示例：简单更新操作**
+
 ```json
 {
   "work_order_type": "update_telco_customer",
@@ -621,6 +624,115 @@ def create_work_order_workflow():
   "final_sql_template": "UPDATE telco_customer SET MonthlyCharges = ? WHERE customerID = ?"
 }
 ```
+
+**高级示例：支持条件分支和错误处理**
+
+```json
+{
+  "work_order_type": "cancel_marine_order",
+  "description": "取消海运单 - 根据入库单号查询并取消关联的海运单",
+  "steps": [
+    {
+      "step": 1,
+      "operation": "QUERY",
+      "table": "t_receipt_order",
+      "where": "receipt_order_number = {receipt_order_number}",
+      "output_fields": ["marine_order_id"],
+      "on_success": {
+        "condition": "{marine_order_id} != null",
+        "next_step": 2,
+        "else_step": 10
+      },
+      "on_failure": {
+        "next_step": 11
+      }
+    },
+    {
+      "step": 2,
+      "operation": "QUERY",
+      "table": "r_electronic_container_order",
+      "where": "marine_order_id = {marine_order_id}",
+      "output_fields": ["id", "status"],
+      "on_success": {
+        "condition": "{id} != null",
+        "next_step": 3,
+        "else_step": 4
+      }
+    },
+    {
+      "step": 3,
+      "operation": "GENERATE_DML",
+      "type": "UPDATE",
+      "table": "r_electronic_container_order",
+      "set": {"status": "1"},
+      "where": "id = {id}",
+      "next_step": 4
+    },
+    {
+      "step": 4,
+      "operation": "GENERATE_DML",
+      "type": "INSERT",
+      "table": "t_check_status_change",
+      "values": {
+        "order_id": "{marine_order_id}",
+        "status": "16",
+        "status_type": "1",
+        "create_by": "系统运维"
+      },
+      "next_step": 5
+    },
+    {
+      "step": 5,
+      "operation": "GENERATE_DML",
+      "type": "UPDATE",
+      "table": "t_marine_order",
+      "set": {"status": "16"},
+      "where": "marine_order_id = {marine_order_id}",
+      "next_step": null
+    },
+    {
+      "step": 10,
+      "operation": "RETURN_ERROR",
+      "message": "入库单未关联海运单，入库单号: {receipt_order_number}",
+      "next_step": null
+    },
+    {
+      "step": 11,
+      "operation": "RETURN_ERROR",
+      "message": "未找到入库单，入库单号: {receipt_order_number}",
+      "next_step": null
+    }
+  ],
+  "final_sql_template": "UPDATE t_marine_order SET status = '16' WHERE marine_order_id = ?; ..."
+}
+```
+
+**配置文件支持的特性：**
+
+1. **条件分支（Conditional Branching）**
+   - `on_success.condition`: 条件表达式，支持比较、成员、逻辑运算符
+   - `on_success.next_step`: 条件为真时跳转的步骤
+   - `on_success.else_step`: 条件为假时跳转的步骤
+   - `on_failure.next_step`: 查询失败时跳转的步骤
+
+2. **条件表达式示例**
+   ```python
+   "{status} == '10'"                          # 比较运算
+   "{marine_order_id} != null"                 # 空值判断
+   "{status} in ['10', '11', '12']"           # 成员运算
+   "{amount} > 1000 and {vip_level} >= 3"     # 复合逻辑
+   ```
+
+3. **操作类型（Operation Types）**
+   - `QUERY`: 执行查询，将结果存入上下文
+   - `GENERATE_DML`: 生成 DML 语句（UPDATE/INSERT/DELETE）
+   - `RETURN_SUCCESS`: 返回成功，终止流程
+   - `RETURN_ERROR`: 返回错误，附带错误信息
+
+4. **流程控制**
+   - 支持非顺序跳转（可跳转到任意步骤）
+   - 支持多 DML 语句生成
+   - 最大迭代次数保护（100次）
 
 #### 5.2.2 MutationStepsService 实现
 
@@ -719,19 +831,57 @@ class MutationStepsService:
    - 置信度 >= 0.7 则使用该配置
 3. **参数提取**
    - 根据配置的 description 提取所需参数
-   - 例如：`customerID`, `new_price`
-4. **多步骤查询**
-   - 执行配置中的 QUERY 步骤
-   - 验证数据存在性
-   - 将查询结果传递到下一步
+   - 例如：`customerID`, `new_price`, `receipt_order_number`
+4. **多步骤查询（支持条件分支）**
+   - 从步骤1开始执行，根据配置动态跳转
+   - 执行 QUERY 操作，将结果存入上下文
+   - 根据 `on_success.condition` 条件表达式判断下一步
+   - 支持 `on_failure` 分支处理查询失败
+   - 支持 `RETURN_ERROR` 和 `RETURN_SUCCESS` 提前终止
+   - 最大迭代次数保护（100次）
 5. **DML 生成**
    - 基于配置的 GENERATE_DML 步骤
    - 替换变量占位符 `{customerID}`, `{new_price}`
+   - 支持生成多条 DML（INSERT + UPDATE）
    - 生成完整的 SQL 语句
 6. **输出 DML**
    - 执行 SQL（带实际值）
    - SQL 模板（参数化查询，使用 `?`）
    - 参数列表
+
+#### 5.2.4 条件表达式求值器
+
+新增 `ConditionEvaluator` 工具类（`src/work_order_assistant/utils/condition_evaluator.py`），用于安全地求值条件表达式：
+
+```python
+from work_order_assistant.utils.condition_evaluator import evaluate_condition
+
+# 示例用法
+context = {
+    "status": "10",
+    "marine_order_id": "12345",
+    "amount": 1500,
+    "vip_level": 5
+}
+
+# 比较运算
+evaluate_condition("{status} == '10'", context)  # True
+
+# 空值判断
+evaluate_condition("{marine_order_id} != null", context)  # True
+
+# 成员运算
+evaluate_condition("{status} in ['10', '11', '12']", context)  # True
+
+# 复合逻辑
+evaluate_condition("{amount} > 1000 and {vip_level} >= 3", context)  # True
+```
+
+**安全特性：**
+- 禁止执行危险代码（import、exec、eval等）
+- 受限的命名空间，只允许基本运算
+- 自动变量替换和类型转换
+- 详细的错误日志
 
 ### 5.3 简化的日志格式
 
@@ -1541,16 +1691,20 @@ workflow.add_edge("entity_extraction", "custom_processing")
 2. **LangGraph 工作流**：清晰的状态机模型，易于理解和维护
 3. **配置化变更管理**：通过 JSON 配置文件管理不同类型的数据变更操作
 4. **智能配置匹配**：LLM 自动匹配最佳配置，无需人工指定工单类型
-5. **多步骤查询**：支持复杂的数据验证流程，确保变更安全性
-6. **安全可控**：查询自动执行，变更生成 DML 供人工审核
+5. **条件分支流程控制**：类似轻量级 BPM，支持复杂业务逻辑和错误处理
+6. **多步骤查询验证**：支持条件分支、非顺序跳转，确保变更安全性
+7. **安全可控**：查询自动执行，变更生成 DML 供人工审核
 
 ### 技术亮点
 
-- **核心创新：Mutation Steps 配置化管理**
-  - 每种变更类型一个配置文件
-  - 包含：description、查询步骤、DML 模板
+- **核心创新：配置化流程引擎**
+  - 每种变更类型一个配置文件（JSON 格式）
+  - 包含：description、查询步骤、DML 模板、条件分支
   - LLM 智能匹配 + 参数自动提取
-  - 支持多步骤查询验证数据存在性
+  - 支持条件分支（`on_success`/`on_failure`）
+  - 支持非顺序跳转（可跳转到任意步骤）
+  - 支持多 DML 语句生成（INSERT + UPDATE）
+  - 安全的条件表达式求值器
 
 - **简化的日志格式**
   - 只保留核心字段（time, lvl, msg）
@@ -1560,12 +1714,14 @@ workflow.add_edge("entity_extraction", "custom_processing")
   - 执行 SQL（带实际值）
   - SQL 模板（参数化查询）
   - 参数列表
+  - 支持多条 DML 语句
   - 便于审核和执行
 
 - **其他特性**
   - OSS 附件下载和解析，支持多种文件格式
   - Excel 附件生成查询结果，便于查看
   - 支持状态持久化和错误恢复
+  - 安全的条件表达式求值
 
 ### 创新点总结
 
@@ -1579,7 +1735,14 @@ workflow.add_edge("entity_extraction", "custom_processing")
    - 自动提取配置所需参数
    - 置信度控制，确保准确性
 
-3. **多步骤查询验证**
+3. **条件分支流程引擎**
+   - 类似轻量级的业务流程引擎（BPM）
+   - 支持条件判断、非顺序跳转、错误处理
+   - 支持复杂业务逻辑（VIP客户快速通道等）
+   - 配置即流程图，易于理解和维护
+   - 安全的表达式求值，防止代码注入
+
+4. **多步骤查询验证**
    - 执行前先查询验证数据
    - 步骤间上下文传递
    - 支持复杂的业务逻辑
@@ -1590,5 +1753,7 @@ workflow.add_edge("entity_extraction", "custom_processing")
 1. 搭建基础架构和 FastAPI 接口 ✅
 2. 实现 LangGraph 核心工作流 ✅
 3. 集成智能配置匹配和多步骤查询 ✅
-4. 完善提示词库和错误处理
-5. 测试、优化、上线
+4. 实现条件分支与流程控制系统 ✅
+5. 完善提示词库和错误处理
+6. 建立完整的测试体系
+7. 测试、优化、上线

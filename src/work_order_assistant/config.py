@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 
 # 在所有配置类之前加载 .env 到 os.environ
 # 这样 LangSmith 等第三方库可以直接从 os.environ 读取配置
-load_dotenv()
+# 使用 override=True 强制覆盖系统环境变量，确保 .env 文件优先
+load_dotenv(override=True)
 
 
 class AppSettings(BaseSettings):

@@ -51,6 +51,7 @@ async def query_mysql(sql: str) -> Dict[str, Any]:
     while retry_count < max_retries:
         try:
             # 创建数据库连接
+            # 使用 use_pure=True 避免 C 扩展的 "Failed raising error" 问题
             conn = mysql.connector.connect(
                 host=settings.mysql.mysql_host,
                 port=settings.mysql.mysql_port,
@@ -59,7 +60,8 @@ async def query_mysql(sql: str) -> Dict[str, Any]:
                 database=settings.mysql.mysql_database,
                 charset=settings.mysql.mysql_charset,
                 connection_timeout=settings.mysql.mysql_connection_timeout,
-                autocommit=True
+                autocommit=True,
+                use_pure=True
             )
 
             logger.info(f"连接到 MySQL: {settings.mysql.mysql_host}/{settings.mysql.mysql_database}")

@@ -121,11 +121,11 @@ class MutationStepsService:
                 return False
 
             operation = step.get("operation")
-            if operation not in ["QUERY", "GENERATE_DML"]:
+            if operation not in ["QUERY", "GENERATE_DML", "RETURN_ERROR", "RETURN_SUCCESS"]:
                 logger.error(f"无效的操作: {operation}")
                 return False
 
-            # QUERY 需要 table 和 output_fields
+            # QUERY 需要 table
             if operation == "QUERY":
                 if "table" not in step:
                     logger.error(f"QUERY 步骤缺少 table: {step}")
@@ -136,6 +136,24 @@ class MutationStepsService:
                 if "type" not in step or "table" not in step:
                     logger.error(f"GENERATE_DML 步骤缺少 type 或 table: {step}")
                     return False
+
+            # RETURN_ERROR 和 RETURN_SUCCESS 需要 message
+            elif operation in ["RETURN_ERROR", "RETURN_SUCCESS"]:
+                if "message" not in step:
+                    logger.warning(f"{operation} 步骤建议配置 message: {step}")
+
+            # 验证分支配置（可选）
+            for branch_key in ["on_success", "on_failure"]:
+                branch = step.get(branch_key)
+                if branch:
+                    if not isinstance(branch, dict):
+                        logger.error(f"{branch_key} 必须是字典类型: {step}")
+                        return False
+
+                    # condition 是可选的
+                    # next_step 和 else_step 至少要有一个
+                    if "next_step" not in branch and "else_step" not in branch:
+                        logger.warning(f"{branch_key} 中应至少配置 next_step 或 else_step: {step}")
 
         return True
 

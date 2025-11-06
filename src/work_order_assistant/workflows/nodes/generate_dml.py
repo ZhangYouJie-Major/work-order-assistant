@@ -25,7 +25,7 @@ async def generate_dml_node(state: WorkOrderState) -> Dict[str, Any]:
     """
     DML 生成节点
 
-    根据多步骤查询结果或实体信息生成 DML 语句
+    根据多步骤查询结果或实体信息生成 DML 语句（支持多条 DML）
 
     Args:
         state: 工作流状态
@@ -44,9 +44,8 @@ async def generate_dml_node(state: WorkOrderState) -> Dict[str, Any]:
         # 模式1: 基于多步骤查询配置生成 DML
         if query_steps_config and query_steps_result and query_steps_result.get("success"):
             logger.info(f"[{task_id}] 使用多步骤查询结果生成 DML")
-            dml_info = _generate_dml_from_config(
+            dml_info = _generate_dml_from_steps(
                 task_id,
-                query_steps_config,
                 query_steps_result
             )
         # 模式2: 使用 LLM 生成 DML（回退方案）
@@ -55,15 +54,16 @@ async def generate_dml_node(state: WorkOrderState) -> Dict[str, Any]:
             prompt_template = prompt_service.load_mutation_specific_prompt("data_update")
             dml_info = await llm_service.generate_dml(entities, prompt_template)
 
+        # 记录生成的 SQL 语句数量
+        sql_statements = dml_info.get("sql_statements", [dml_info.get("sql")])
         logger.info(
-            f"[{task_id}] DML 生成完成: {dml_info.get('operation_type')} "
-            f"操作表 {dml_info.get('affected_tables')} "
+            f"[{task_id}] DML 生成完成: 共 {len(sql_statements)} 条语句 "
             f"(风险级别: {dml_info.get('risk_level')})"
         )
 
         return {
             "dml_info": dml_info,
-            "sql": dml_info.get("sql"),
+            "sql": dml_info.get("sql"),  # 兼容性：保留单条 SQL
             "current_node": "generate_dml",
         }
 
@@ -76,51 +76,76 @@ async def generate_dml_node(state: WorkOrderState) -> Dict[str, Any]:
         }
 
 
-def _generate_dml_from_config(
+def _generate_dml_from_steps(
     task_id: str,
-    config: Dict[str, Any],
     query_result: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    基于配置和查询结果生成 DML
+    从查询步骤结果中提取并生成所有 DML 语句
 
     Args:
         task_id: 任务 ID
-        config: 查询步骤配置
         query_result: 多步骤查询结果
 
     Returns:
-        DML 信息
+        DML 信息（包含多条 SQL）
     """
-    # 获取 DML 生成步骤
-    dml_step = mutation_steps_service.get_dml_step(config)
-
-    if not dml_step:
-        raise ValueError("No GENERATE_DML step found in config")
-
-    # 获取查询结果的上下文
+    steps = query_result.get("steps", [])
     context = query_result.get("context", {})
 
-    # 提取 DML 配置
-    dml_type = dml_step.get("type")
-    table = dml_step.get("table")
-    set_clause = dml_step.get("set", {})
-    where_clause = dml_step.get("where", "")
-    values_clause = dml_step.get("values", {})
+    sql_statements = []
+    affected_tables = []
+    max_risk_level = "low"
 
-    logger.info(f"[{task_id}] 为表 {table} 生成 {dml_type} DML")
+    # 遍历所有步骤，找到所有 GENERATE_DML 步骤
+    for step_result in steps:
+        if step_result.get("operation") != "GENERATE_DML":
+            continue
 
-    # 构建 SQL
-    sql = _build_sql(dml_type, table, set_clause, where_clause, values_clause, context)
+        dml_config = step_result.get("dml_config")
+        step_context = step_result.get("context_snapshot", context)
+
+        if not dml_config:
+            logger.warning(f"[{task_id}] DML 步骤缺少配置")
+            continue
+
+        # 提取 DML 配置
+        dml_type = dml_config.get("type")
+        table = dml_config.get("table")
+        set_clause = dml_config.get("set", {})
+        where_clause = dml_config.get("where", "")
+        values_clause = dml_config.get("values", {})
+
+        logger.info(f"[{task_id}] 为表 {table} 生成 {dml_type} DML")
+
+        # 构建 SQL
+        sql = _build_sql(dml_type, table, set_clause, where_clause, values_clause, step_context)
+        sql_statements.append(sql)
+
+        if table not in affected_tables:
+            affected_tables.append(table)
+
+        # 更新风险等级
+        risk = _estimate_risk_level(dml_type, where_clause)
+        if _compare_risk_level(risk, max_risk_level) > 0:
+            max_risk_level = risk
+
+    if not sql_statements:
+        raise ValueError("No DML statements generated from steps")
+
+    # 合并所有 SQL 语句
+    combined_sql = ";\n".join(sql_statements) + ";"
 
     # 构建 DML 信息
     dml_info = {
-        "operation_type": dml_type,
-        "affected_tables": [table],
-        "sql": sql,
+        "operation_type": "MULTI_DML" if len(sql_statements) > 1 else sql_statements[0].split()[0],
+        "affected_tables": affected_tables,
+        "sql": combined_sql,  # 合并后的 SQL
+        "sql_statements": sql_statements,  # 单独的 SQL 列表
+        "statement_count": len(sql_statements),
         "context": context,
-        "risk_level": _estimate_risk_level(dml_type, where_clause),
-        "description": f"{dml_type} {table}",
+        "risk_level": max_risk_level,
+        "description": f"执行 {len(sql_statements)} 条 DML 语句，影响表: {', '.join(affected_tables)}",
     }
 
     return dml_info
@@ -220,7 +245,7 @@ def _replace_variables(template: str, context: Dict[str, Any]) -> str:
 
         if value is None:
             logger.warning(f"变量 '{var_name}' 在上下文中未找到")
-            return match.group(0)  # 保持原样
+            return "NULL"  # 返回 NULL 而不是保持原样
 
         # 如果是字符串，添加引号
         if isinstance(value, str):
@@ -230,9 +255,21 @@ def _replace_variables(template: str, context: Dict[str, Any]) -> str:
         else:
             return str(value)
 
-    # 匹配 {variable_name} 格式
-    result = re.sub(r'\{(\w+)\}', replace_fn, str(template))
-    return result
+    template_str = str(template)
+
+    # 检查是否包含变量占位符
+    if '{' in template_str and '}' in template_str:
+        # 包含变量，进行替换
+        result = re.sub(r'\{(\w+)\}', replace_fn, template_str)
+        return result
+    else:
+        # 不包含变量，视为字面量
+        # 如果是数字字符串，不加引号
+        if template_str.isdigit():
+            return template_str
+        # 其他情况加引号
+        escaped_value = template_str.replace("'", "''")
+        return f"'{escaped_value}'"
 
 
 def _estimate_risk_level(dml_type: str, where_clause: str) -> str:
@@ -263,3 +300,29 @@ def _estimate_risk_level(dml_type: str, where_clause: str) -> str:
         return "low"
 
     return "medium"
+
+
+def _compare_risk_level(risk1: str, risk2: str) -> int:
+    """
+    比较两个风险等级
+
+    Args:
+        risk1: 第一个风险等级
+        risk2: 第二个风险等级
+
+    Returns:
+        如果 risk1 > risk2 返回 1
+        如果 risk1 == risk2 返回 0
+        如果 risk1 < risk2 返回 -1
+    """
+    risk_order = {"low": 0, "medium": 1, "high": 2}
+    level1 = risk_order.get(risk1, 1)
+    level2 = risk_order.get(risk2, 1)
+
+    if level1 > level2:
+        return 1
+    elif level1 < level2:
+        return -1
+    else:
+        return 0
+

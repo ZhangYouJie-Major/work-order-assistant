@@ -1,33 +1,84 @@
 {
   "work_order_type": "cancel_marine_order",
-  "description": "取消海运单 - 根据入库单号查询并取消关联的海运单",
+  "description": "取消海运单 - 根据入库单号查询并取消关联的海运单 入参的receipt_order_number是入库单号",
   "steps": [
     {
       "step": 1,
       "operation": "QUERY",
       "table": "t_receipt_order",
-      "where": "receipt_order_no = {receipt_order_no}",
-      "output_fields": ["marine_order_id", "receipt_order_no"]
+      "where": "receipt_order_number = {receipt_order_number}",
+      "output_fields": ["marine_order_id", "receipt_order_number"],
+      "on_success": {
+        "condition": "{marine_order_id} != null",
+        "next_step": 2,
+        "else_step": 10
+      },
+      "on_failure": {
+        "next_step": 11
+      }
     },
     {
       "step": 2,
       "operation": "QUERY",
-      "table": "t_marine_order",
-      "where": "id = {marine_order_id}",
-      "output_fields": ["status", "id", "marine_order_no"]
+      "table": "r_electronic_container_order",
+      "where": "marine_order_id = {marine_order_id}",
+      "output_fields": ["id", "status"],
+      "on_success": {
+        "condition": "{id} != null",
+        "next_step": 3,
+        "else_step": 4
+      },
+      "on_failure": {
+        "next_step": 4
+      }
     },
     {
       "step": 3,
       "operation": "GENERATE_DML",
       "type": "UPDATE",
+      "table": "r_electronic_container_order",
+      "set": {
+        "status": "1"
+      },
+      "where": "id = {id}",
+      "next_step": 4
+    },
+    {
+      "step": 4,
+      "operation": "GENERATE_DML",
+      "type": "INSERT",
+      "table": "t_check_status_change",
+      "values": {
+        "order_id": "{marine_order_id}",
+        "status": "16",
+        "status_type": "1",
+        "create_by": "系统运维"
+      },
+      "next_step": 5
+    },
+    {
+      "step": 5,
+      "operation": "GENERATE_DML",
+      "type": "UPDATE",
       "table": "t_marine_order",
       "set": {
-        "status": "CANCELLED",
-        "updated_at": "NOW()",
-        "cancel_reason": "{cancel_reason}"
+        "status": "16"
       },
-      "where": "id = {marine_order_id}"
+      "where": "marine_order_id = {marine_order_id}",
+      "next_step": null
+    },
+    {
+      "step": 10,
+      "operation": "RETURN_ERROR",
+      "message": "入库单未关联海运单，入库单号: {receipt_order_number}",
+      "next_step": null
+    },
+    {
+      "step": 11,
+      "operation": "RETURN_ERROR",
+      "message": "未找到入库单，入库单号: {receipt_order_number}",
+      "next_step": null
     }
   ],
-  "final_sql_template": "UPDATE t_marine_order SET status = 'CANCELLED', updated_at = NOW(), cancel_reason = ? WHERE id = ?"
+  "final_sql_template": "UPDATE t_marine_order SET status = '16' WHERE marine_order_id = ?; UPDATE r_electronic_container_order SET status = 1 WHERE id = ?; INSERT INTO t_check_status_change(order_id, status, status_type, create_by) VALUES (?, 16, 1, '系统运维');"
 }

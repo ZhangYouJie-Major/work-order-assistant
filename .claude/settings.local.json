@@ -15,7 +15,12 @@
       "Bash(dir:*)",
       "Bash(findstr:*)",
       "Bash(netstat:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(pip show:*)",
+      "WebFetch(domain:pypi.org)",
+      "Bash(cp:*)",
+      "Bash(cat:*)",
+      "Bash(set)"
     ],
     "deny": [],
     "ask": []
