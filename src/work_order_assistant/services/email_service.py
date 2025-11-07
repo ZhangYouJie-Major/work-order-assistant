@@ -37,6 +37,7 @@ class EmailService:
         sql: str,
         result_data: Dict[str, Any],
         excel_file: bytes,
+        work_order_content: str = "",
     ) -> None:
         """
         发送查询结果邮件
@@ -48,10 +49,20 @@ class EmailService:
             sql: 执行的 SQL 语句
             result_data: 查询结果数据
             excel_file: Excel 附件内容
+            work_order_content: 工单原始内容
         """
         logger.info(f"发送查询结果邮件 (任务 {task_id})")
 
         subject = f"【工单查询结果】{ticket_id}"
+
+        # 构建工单内容部分
+        work_order_content_html = ""
+        if work_order_content:
+            # 将工单内容转义，防止 HTML 注入
+            import html
+            escaped_content = html.escape(work_order_content)
+            work_order_content_html = f"""<p><strong>工单内容:</strong></p>
+            <div style="background: #fff; padding: 10px; border-left: 3px solid #007bff; margin-top: 10px; white-space: pre-wrap;">{escaped_content}</div>"""
 
         html_body = f"""
 <!DOCTYPE html>
@@ -74,6 +85,7 @@ class EmailService:
         <div class="info">
             <p><strong>任务 ID:</strong> {task_id}</p>
             <p><strong>工单编号:</strong> {ticket_id}</p>
+            {work_order_content_html}
         </div>
 
         <h4>执行的 SQL:</h4>
@@ -303,14 +315,29 @@ class EmailService:
         html_part = MIMEText(html_body, "html", "utf-8")
         msg.attach(html_part)
 
-        # 添加附件
-        attachment = MIMEBase("application", "octet-stream")
+        # 添加附件（Excel 格式）
+        from urllib.parse import quote
+
+        attachment = MIMEBase(
+            "application",
+            "vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         attachment.set_payload(attachment_content)
         encoders.encode_base64(attachment)
+
+        # 使用 RFC 2231 标准编码文件名（支持中文）
+        # 同时提供 ASCII 备用文件名和 UTF-8 编码文件名
+        ascii_filename = "query_result.xlsx"  # ASCII 备用文件名
+        encoded_filename = quote(attachment_filename)  # URL 编码中文文件名
+
+        # 设置 Content-Disposition 头，同时包含两种格式
+        # filename: 不支持中文的邮件客户端使用
+        # filename*: 支持 RFC 2231 的邮件客户端使用（显示中文）
         attachment.add_header(
             "Content-Disposition",
-            f"attachment; filename={attachment_filename}",
+            f'attachment; filename="{ascii_filename}"; filename*=utf-8\'\'{encoded_filename}'
         )
+
         msg.attach(attachment)
 
         # 发送邮件
@@ -324,6 +351,7 @@ class EmailService:
             msg: 邮件消息对象
             recipients: 收件人列表
         """
+        smtp = None
         try:
             smtp = aiosmtplib.SMTP(
                 hostname=self.settings.smtp_host,
@@ -334,10 +362,17 @@ class EmailService:
             await smtp.connect()
             await smtp.login(self.settings.smtp_user, self.settings.smtp_password)
             await smtp.send_message(msg)
-            await smtp.quit()
 
             logger.debug(f"SMTP 发送成功，收件人: {len(recipients)} 人")
 
         except Exception as e:
             logger.error(f"通过 SMTP 发送邮件失败: {e}")
             raise
+        finally:
+            # 优雅关闭 SMTP 连接
+            if smtp is not None:
+                try:
+                    await smtp.quit()
+                except Exception:
+                    # 忽略关闭连接时的错误（常见于服务器已主动关闭连接）
+                    pass

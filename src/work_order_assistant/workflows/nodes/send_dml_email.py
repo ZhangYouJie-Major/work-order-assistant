@@ -81,12 +81,20 @@ async def send_dml_email_node(state: WorkOrderState) -> Dict[str, Any]:
         # 获取工单编号
         ticket_id = metadata.get("ticket_id", task_id)
 
-        # 获取运维团队邮箱
+        # 获取运维团队邮箱（已经是列表类型）
         ops_emails = settings.email.email_ops_team
-        if isinstance(ops_emails, str):
-            ops_emails = [email.strip() for email in ops_emails.split(",")]
 
         logger.info(f"[{task_id}] 发送 DML 邮件到运维: {ops_emails}")
+
+        # 检查抄送邮箱，如果为空则使用开发团队邮箱
+        if not cc_emails or len(cc_emails) == 0:
+            # settings.email.email_dev_team 已经是列表类型，不需要再 split
+            default_cc = settings.email.email_dev_team
+            if default_cc:
+                cc_emails = default_cc
+                logger.warning(
+                    f"[{task_id}] 未提供抄送邮箱，使用默认: {cc_emails}"
+                )
 
         # 发送邮件
         await email_service.send_dml_review_email(

@@ -1,0 +1,13 @@
+{
+  "work_order_type": "查询箱型",
+  "description": "查询海运所有的箱型",
+  "steps": [
+    {
+      "step": 1,
+      "operation": "QUERY",
+      "table": "m_equipment",
+      "output_fields": ["box_model"]
+    }
+  ],
+  "final_sql_template": "select box_model, status from m_equipment"
+}
