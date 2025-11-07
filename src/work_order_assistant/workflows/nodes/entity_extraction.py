@@ -4,7 +4,7 @@
 从工单内容中提取结构化信息
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from ...workflows.state import WorkOrderState
 from ...services.prompt_service import PromptService
 from ...services.llm_service import LLMService
@@ -58,85 +58,75 @@ async def entity_extraction_node(state: WorkOrderState) -> Dict[str, Any]:
             f"[{task_id}] 实体提取完成: tables={entities.get('target_tables')}"
         )
 
-        # 如果是 mutation 类型，加载查询步骤配置
+        # 智能匹配配置（query 和 mutation 都支持）
         query_steps_config = None
         work_order_subtype = None
+        sql = None
 
-        if operation_type == "mutation":
-            # 方案1：使用智能匹配（根据工单内容匹配最佳配置）
-            logger.info(f"[{task_id}] 开始智能匹配变更配置")
-            match_result = await mutation_steps_service.match_config_by_content(
-                content, llm_service
+        logger.info(f"[{task_id}] 开始智能匹配配置 (类型: {operation_type})")
+        match_result = await mutation_steps_service.match_config_by_content(
+            content, llm_service
+        )
+
+        if match_result:
+            work_order_subtype, query_steps_config = match_result
+            logger.info(
+                f"[{task_id}] 智能匹配成功: {work_order_subtype}, "
+                f"包含 {len(query_steps_config.get('steps', []))} 个步骤"
             )
 
-            if match_result:
-                work_order_subtype, query_steps_config = match_result
-                logger.info(
-                    f"[{task_id}] 智能匹配成功: {work_order_subtype}, "
-                    f"包含 {len(query_steps_config.get('steps', []))} 个步骤"
-                )
+            # 如果是 query 类型且有 final_sql_template，直接使用
+            if operation_type == "query" and query_steps_config.get("final_sql_template"):
+                sql = query_steps_config.get("final_sql_template")
+                logger.info(f"[{task_id}] 使用配置模板 SQL: {sql}")
 
-                # 根据配置的 description 重新提取参数
+                # 根据配置的 description 提取参数，用于 SQL 参数替换
+                description = query_steps_config.get("description", "")
+                if description and "{" in sql:  # 如果 SQL 模板有参数占位符
+                    logger.info(f"[{task_id}] 根据配置描述提取参数: {description}")
+                    params = await _extract_params_from_description(
+                        task_id, content, description, llm_service
+                    )
+                    if params:
+                        entities.update(params)
+                        # 替换 SQL 模板中的参数
+                        try:
+                            sql = sql.format(**params)
+                            logger.info(f"[{task_id}] 参数替换后的 SQL: {sql}")
+                        except KeyError as e:
+                            logger.warning(f"[{task_id}] SQL 参数替换失败: {e}，使用原模板")
+
+        # 如果是 query 类型但没有匹配到配置，或者没有 SQL 模板
+        if operation_type == "query" and not sql:
+            logger.info(f"[{task_id}] 未找到查询配置或 SQL 模板，使用 LLM 生成 SQL")
+            try:
+                # 加载 SQL 生成提示词
+                sql_prompt = prompt_service.load_sql_generation_prompt()
+
+                # 调用 LLM 生成 SQL
+                sql = await llm_service.generate_sql_query(entities, sql_prompt)
+
+                logger.info(f"[{task_id}] SQL 生成完成: {sql[:100]}...")
+            except Exception as e:
+                logger.error(f"[{task_id}] SQL 生成失败: {e}")
+                return {
+                    "entities": entities,
+                    "error": f"SQL 生成失败: {str(e)}",
+                    "current_node": "entity_extraction",
+                }
+
+        # 如果是 mutation 类型，需要提取参数用于多步骤查询
+        if operation_type == "mutation":
+            if match_result:
+                # 已经匹配到配置，提取参数
                 description = query_steps_config.get("description", "")
                 logger.info(f"[{task_id}] 根据配置描述提取参数: {description}")
 
-                # 调用 LLM 提取配置所需的参数
-                param_prompt = f"""你是一个参数提取专家。请根据工单内容和参数描述，提取出所有需要的参数。
-
-工单内容：
-{content}
-
-参数描述：
-{description}
-
-请仔细分析工单内容，提取出描述中提到的所有参数及其值。
-
-输出格式（JSON）：
-{{
-    "param1_name": "param1_value",
-    "param2_name": "param2_value",
-    ...
-}}
-
-例如，如果描述是"入参的customerID是客户id，new_price是月费金额"，
-工单是"请将客户ID为 1001 的电信客户数据表中的月费金额更新为 99.99 元"，
-则应该输出：
-{{
-    "customerID": "1001",
-    "new_price": "99.99"
-}}
-"""
-
-                from langchain_core.messages import HumanMessage, SystemMessage
-                messages = [
-                    SystemMessage(content="你是一个参数提取专家"),
-                    HumanMessage(content=param_prompt),
-                ]
-
-                try:
-                    response = await llm_service.llm.ainvoke(messages)
-                    result_text = response.content
-
-                    logger.info(f"[{task_id}] 参数提取 LLM 输出: {result_text}")
-
-                    # 解析响应
-                    import re
-                    import json
-                    json_match = re.search(r'```json\s*(.*?)\s*```', result_text, re.DOTALL)
-                    if json_match:
-                        params = json.loads(json_match.group(1))
-                    else:
-                        params = json.loads(result_text)
-
-                    logger.info(f"[{task_id}] 提取的参数: {params}")
-
-                    # 将提取的参数合并到 entities 中
+                params = await _extract_params_from_description(
+                    task_id, content, description, llm_service
+                )
+                if params:
                     entities.update(params)
-
-                except Exception as e:
-                    logger.error(f"[{task_id}] 参数提取失败: {e}")
-                    # 继续使用原来的 entities
-
             else:
                 # 方案2：回退到从 entities 获取 work_order_subtype
                 work_order_subtype = entities.get("work_order_subtype")
@@ -152,13 +142,19 @@ async def entity_extraction_node(state: WorkOrderState) -> Dict[str, Any]:
                 else:
                     logger.warning(f"[{task_id}] 智能匹配失败且未指定 work_order_subtype，将使用默认 DML 生成")
 
-        return {
+        result = {
             "entities": entities,
             "attachment_parsed_data": attachment_data,
             "query_steps_config": query_steps_config,
             "work_order_subtype": work_order_subtype,
             "current_node": "entity_extraction",
         }
+
+        # 如果是 query 类型，将生成的 SQL 添加到状态
+        if operation_type == "query" and sql:
+            result["sql"] = sql
+
+        return result
 
     except Exception as e:
         logger.error(f"[{task_id}] 实体提取失败: {e}")
@@ -206,4 +202,79 @@ async def _process_attachments(
     if parsed_attachments:
         return {"attachments": parsed_attachments, "count": len(parsed_attachments)}
     else:
+        return None
+
+
+async def _extract_params_from_description(
+    task_id: str,
+    content: str,
+    description: str,
+    llm_service: LLMService,
+) -> Optional[Dict[str, Any]]:
+    """
+    根据配置描述从工单内容中提取参数
+
+    Args:
+        task_id: 任务 ID
+        content: 工单内容
+        description: 参数描述
+        llm_service: LLM 服务
+
+    Returns:
+        提取的参数字典，失败返回 None
+    """
+    param_prompt = f"""你是一个参数提取专家。请根据工单内容和参数描述，提取出所有需要的参数。
+
+工单内容：
+{content}
+
+参数描述：
+{description}
+
+请仔细分析工单内容，提取出描述中提到的所有参数及其值。
+
+输出格式（JSON）：
+{{
+    "param1_name": "param1_value",
+    "param2_name": "param2_value",
+    ...
+}}
+
+例如，如果描述是"入参的customerID是客户id，new_price是月费金额"，
+工单是"请将客户ID为 1001 的电信客户数据表中的月费金额更新为 99.99 元"，
+则应该输出：
+{{
+    "customerID": "1001",
+    "new_price": "99.99"
+}}
+"""
+
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    messages = [
+        SystemMessage(content="你是一个参数提取专家"),
+        HumanMessage(content=param_prompt),
+    ]
+
+    try:
+        response = await llm_service.llm.ainvoke(messages)
+        result_text = response.content
+
+        logger.info(f"[{task_id}] 参数提取 LLM 输出: {result_text}")
+
+        # 解析响应
+        import re
+        import json
+
+        json_match = re.search(r"```json\s*(.*?)\s*```", result_text, re.DOTALL)
+        if json_match:
+            params = json.loads(json_match.group(1))
+        else:
+            params = json.loads(result_text)
+
+        logger.info(f"[{task_id}] 提取的参数: {params}")
+        return params
+
+    except Exception as e:
+        logger.error(f"[{task_id}] 参数提取失败: {e}")
         return None

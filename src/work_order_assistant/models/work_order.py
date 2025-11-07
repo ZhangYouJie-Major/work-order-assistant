@@ -38,25 +38,6 @@ class WorkOrder(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "content": "查询用户 ID 为 12345 的订单信息，最近 7 天的，包括订单金额、状态和创建时间",
-                "oss_attachments": [
-                    {
-                        "filename": "requirement.xlsx",
-                        "url": "https://oss.example.com/uploads/2025/10/requirement_20251010.xlsx",
-                        "size": 102400,
-                        "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    }
-                ],
-                "cc_emails": ["user@example.com", "manager@example.com"],
-                "user": {
-                    "email": "user@example.com",
-                    "name": "张三",
-                    "department": "运营部",
-                },
-                "metadata": {
-                    "ticket_id": "WO-2025-001",
-                    "priority": "medium",
-                    "source_system": "OA",
-                },
+                "content": "查询海运所有箱型"
             }
         }

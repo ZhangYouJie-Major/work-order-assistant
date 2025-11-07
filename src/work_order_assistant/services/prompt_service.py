@@ -115,6 +115,15 @@ class PromptService:
         """
         return self._load_file("base/context_analysis.txt")
 
+    def load_sql_generation_prompt(self) -> str:
+        """
+        加载 SQL 查询生成提示词
+
+        Returns:
+            SQL 生成提示词内容
+        """
+        return self._load_file("query/sql_generation.txt")
+
     def _load_file(self, relative_path: str) -> str:
         """
         加载提示词文件

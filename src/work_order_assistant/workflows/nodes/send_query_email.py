@@ -30,8 +30,38 @@ async def send_query_email_node(state: WorkOrderState) -> Dict[str, Any]:
     query_result = state.get("query_result")
     sql = state.get("sql")
     metadata = state.get("metadata", {})
+    content = state.get("content", "")  # 获取工单原始内容
 
     logger.info(f"[{task_id}] 开始发送查询结果邮件")
+
+    # 检查收件人是否存在，如果为空则使用配置的默认邮箱
+    if not cc_emails or len(cc_emails) == 0:
+        # 使用 .env 中配置的开发团队邮箱作为默认收件人
+        # settings.email.email_dev_team 已经是列表类型，不需要再 split
+        default_emails = settings.email.email_dev_team
+        if default_emails:
+            cc_emails = default_emails
+            logger.warning(
+                f"[{task_id}] 未提供收件人，使用默认邮箱: {cc_emails}"
+            )
+        else:
+            error_msg = "收件人列表为空且未配置默认邮箱，无法发送邮件"
+            logger.error(f"[{task_id}] {error_msg}")
+            return {
+                "email_sent": False,
+                "error": error_msg,
+                "current_node": "send_query_email",
+            }
+
+    # 检查查询结果是否存在
+    if not query_result:
+        error_msg = "查询结果为空，无法发送邮件"
+        logger.error(f"[{task_id}] {error_msg}")
+        return {
+            "email_sent": False,
+            "error": error_msg,
+            "current_node": "send_query_email",
+        }
 
     try:
         # 获取工单编号
@@ -52,6 +82,7 @@ async def send_query_email_node(state: WorkOrderState) -> Dict[str, Any]:
             sql=sql,
             result_data=query_result,
             excel_file=excel_file,
+            work_order_content=content,
         )
 
         logger.info(f"[{task_id}] 查询结果邮件发送成功")
