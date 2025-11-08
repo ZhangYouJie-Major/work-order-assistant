@@ -25,14 +25,6 @@ class WorkOrderSubmitResponse(BaseModel):
     data: WorkOrderSubmitResponseData = Field(..., description="响应数据")
 
 
-class ProgressInfo(BaseModel):
-    """处理进度信息"""
-
-    completed_nodes: List[str] = Field(..., description="已完成的节点")
-    current_step: str = Field(..., description="当前步骤描述")
-    progress_percent: int = Field(..., description="进度百分比")
-
-
 class WorkOrderStatusResponseData(BaseModel):
     """工单状态查询响应数据"""
 
@@ -42,7 +34,6 @@ class WorkOrderStatusResponseData(BaseModel):
     )
     operation_type: Optional[str] = Field(None, description="操作类型")
     current_node: Optional[str] = Field(None, description="当前节点")
-    progress: Optional[ProgressInfo] = Field(None, description="处理进度")
     email_sent: Optional[bool] = Field(None, description="邮件是否已发送")
     email_recipients: Optional[List[str]] = Field(None, description="邮件接收人")
     created_at: datetime = Field(..., description="任务创建时间")
@@ -75,37 +66,3 @@ class HealthCheckResponse(BaseModel):
     version: str = Field(..., description="版本号")
     timestamp: datetime = Field(..., description="时间戳")
     services: ServiceStatus = Field(..., description="各服务状态")
-
-
-class ErrorDetail(BaseModel):
-    """错误详情"""
-
-    field: str = Field(..., description="错误字段")
-    message: str = Field(..., description="错误消息")
-
-
-class ErrorResponseData(BaseModel):
-    """错误响应数据"""
-
-    errors: Optional[List[ErrorDetail]] = Field(None, description="错误列表")
-
-
-class ErrorResponse(BaseModel):
-    """错误响应"""
-
-    code: int = Field(..., description="错误码")
-    message: str = Field(..., description="错误消息")
-    data: Optional[ErrorResponseData] = Field(None, description="错误详情")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "code": 400,
-                "message": "请求参数验证失败",
-                "data": {
-                    "errors": [
-                        {"field": "cc_emails", "message": "抄送邮箱列表不能为空"}
-                    ]
-                },
-            }
-        }

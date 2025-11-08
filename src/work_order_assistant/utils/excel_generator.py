@@ -48,32 +48,3 @@ class ExcelGenerator:
         except Exception as e:
             logger.error(f"生成 Excel 失败: {e}")
             raise
-
-    @staticmethod
-    def generate_from_dict_list(data: List[Dict[str, Any]]) -> bytes:
-        """
-        从字典列表生成 Excel 文件
-
-        Args:
-            data: 字典列表
-
-        Returns:
-            Excel 文件二进制内容
-        """
-        try:
-            df = pd.DataFrame(data)
-
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="数据")
-
-            output.seek(0)
-            excel_bytes = output.read()
-
-            logger.info(f"从字典列表生成 Excel: {len(data)} 行")
-
-            return excel_bytes
-
-        except Exception as e:
-            logger.error(f"从字典列表生成 Excel 失败: {e}")
-            raise

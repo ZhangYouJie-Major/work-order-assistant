@@ -113,41 +113,12 @@ class EmailSettings(BaseSettings):
     )
 
 
-class AsyncTaskSettings(BaseSettings):
-    """异步任务配置"""
-
-    use_celery: bool = Field(default=False, alias="USE_CELERY")
-    celery_broker_url: Optional[str] = Field(default=None, alias="CELERY_BROKER_URL")
-    celery_result_backend: Optional[str] = Field(
-        default=None, alias="CELERY_RESULT_BACKEND"
-    )
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
-
-
 class LogSettings(BaseSettings):
     """日志配置"""
 
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     log_file: str = Field(default="logs/app.log", alias="LOG_FILE")
     log_format: Literal["json", "text"] = Field(default="json", alias="LOG_FORMAT")
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
-
-
-class WorkflowSettings(BaseSettings):
-    """工作流配置"""
-
-    langgraph_checkpointer: Literal["memory", "sqlite", "postgres"] = Field(
-        default="memory", alias="LANGGRAPH_CHECKPOINTER"
-    )
-    langgraph_db_path: str = Field(
-        default="data/checkpoints.db", alias="LANGGRAPH_DB_PATH"
-    )
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
@@ -178,9 +149,7 @@ class Settings:
         self.mysql = MySQLSettings()
         self.oss = OSSSettings()
         self.email = EmailSettings()
-        self.async_task = AsyncTaskSettings()
         self.log = LogSettings()
-        self.workflow = WorkflowSettings()
         self.resource = ResourceSettings()
 
 

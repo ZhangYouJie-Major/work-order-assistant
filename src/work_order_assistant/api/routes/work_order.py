@@ -15,7 +15,6 @@ from ..schemas.response import (
     WorkOrderStatusResponseData,
     HealthCheckResponse,
     ServiceStatus,
-    ErrorResponse,
 )
 from ...workflows.work_order_workflow import work_order_app
 from ...workflows.state import WorkOrderState

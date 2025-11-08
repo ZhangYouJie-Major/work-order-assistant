@@ -116,21 +116,3 @@ def get_logger(name: str) -> logging.Logger:
         Logger 实例
     """
     return logging.getLogger(name)
-
-
-class LoggerAdapter(logging.LoggerAdapter):
-    """
-    日志适配器，用于添加上下文信息
-
-    使用示例:
-        logger = get_logger(__name__)
-        context_logger = LoggerAdapter(logger, {"task_id": "task-123", "user": "user@example.com"})
-        context_logger.info("Processing work order", extra={"operation": "query"})
-    """
-
-    def process(self, msg, kwargs):
-        # 合并上下文和额外参数
-        extra = kwargs.get("extra", {})
-        extra.update(self.extra)
-        kwargs["extra"] = extra
-        return msg, kwargs

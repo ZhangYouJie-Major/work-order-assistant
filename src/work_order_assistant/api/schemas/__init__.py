@@ -7,7 +7,6 @@ from .response import (
     WorkOrderSubmitResponse,
     WorkOrderStatusResponse,
     HealthCheckResponse,
-    ErrorResponse,
 )
 
 __all__ = [
@@ -18,5 +17,4 @@ __all__ = [
     "WorkOrderSubmitResponse",
     "WorkOrderStatusResponse",
     "HealthCheckResponse",
-    "ErrorResponse",
 ]
