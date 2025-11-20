@@ -1,7 +1,7 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "work_order_assistant": "./src/work_order_assistant/agent.py:graph"
+    "work_order_assistant": "work_order_assistant.agent:graph"
   },
   "env": ".env",
   "python_version": "3.12"

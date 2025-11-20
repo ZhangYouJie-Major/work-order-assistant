@@ -60,32 +60,6 @@ class PromptService:
             # 加载变更类提示词
             return self._load_file("mutation/general_mutation.txt")
 
-    def load_mutation_specific_prompt(self, mutation_type: str) -> str:
-        """
-        加载特定类型的变更提示词
-
-        Args:
-            mutation_type: 变更类型 (data_update | data_insert | data_delete)
-
-        Returns:
-            特定变更类型的提示词
-        """
-        file_map = {
-            "data_update": "mutation/data_update.txt",
-            "data_insert": "mutation/data_insert.txt",
-            "data_delete": "mutation/data_delete.txt",
-        }
-
-        file_path = file_map.get(mutation_type, "mutation/general_mutation.txt")
-
-        # 尝试加载特定文件，如果不存在则回退到通用文件
-        try:
-            return self._load_file(file_path)
-        except FileNotFoundError:
-            logger.warning(
-                f"特定提示词文件 {file_path} 未找到，回退到通用提示词"
-            )
-            return self._load_file("mutation/general_mutation.txt")
 
     def load_sql_generation_prompt(self) -> str:
         """
