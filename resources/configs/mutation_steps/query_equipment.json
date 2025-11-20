@@ -1,6 +1,6 @@
 {
   "work_order_type": "查询箱型",
-  "description": "查询海运所有的箱型",
+  "description": "查询海运箱型 - 查询所有可用的海运集装箱箱型 | 操作对象: 设备表(m_equipment) | 查询参数: 无",
   "steps": [
     {
       "step": 1,

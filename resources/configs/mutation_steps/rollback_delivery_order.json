@@ -1,0 +1,90 @@
+{
+  "work_order_type": "rollback_delivery_order",
+  "description": "回退海运订单到仓状态 - 仓库误点已到仓需要回退 | 操作对象: 海运订单(t_marine_order)、电子箱单(r_electronic_container_order) | 查询参数: container(集装箱号，不带'-'的纯字母数字组合如TEMU7646934，区别于带'-'的入库单号如W3081-20250905-001)",
+  "steps": [
+    {
+      "step": 1,
+      "operation": "QUERY",
+      "table": "t_marine_order",
+      "where": "container = {container}",
+      "output_fields": ["marine_order_id", "container"],
+      "on_success": {
+        "condition": "{marine_order_id} != null",
+        "next_step": 2,
+        "else_step": 10
+      },
+      "on_failure": {
+        "next_step": 11
+      }
+    },
+    {
+      "step": 2,
+      "operation": "GENERATE_DML",
+      "type": "UPDATE",
+      "table": "t_marine_order",
+      "set": {
+        "wh_id": null,
+        "unloading_dock_id": null,
+        "status": -1,
+        "actual_delivery_time": null,
+        "empty_container_date": null,
+        "return_container_date": null
+      },
+      "where": "marine_order_id = {marine_order_id}",
+      "next_step": 3
+    },
+    {
+      "step": 3,
+      "operation": "QUERY",
+      "table": "r_electronic_container_order",
+      "where": "marine_order_id = {marine_order_id}",
+      "output_fields": ["id"],
+      "on_success": {
+        "condition": "{id} != null",
+        "next_step": 4,
+        "else_step": 5
+      },
+      "on_failure": {
+        "next_step": 5
+      }
+    },
+    {
+      "step": 4,
+      "operation": "GENERATE_DML",
+      "type": "UPDATE",
+      "table": "r_electronic_container_order",
+      "set": {
+        "change_warehouse_flag": "0",
+        "logistics_status": "0"
+      },
+      "where": "id = {id}",
+      "next_step": 5
+    },
+    {
+      "step": 5,
+      "operation": "GENERATE_DML",
+      "type": "INSERT",
+      "table": "t_check_status_change",
+      "values": {
+        "order_id": "{marine_order_id}",
+        "status": "-1",
+        "status_type": "1",
+        "create_by": "系统运维"
+      },
+      "next_step": null
+    },
+    {
+      "step": 10,
+      "operation": "RETURN_ERROR",
+      "message": "未找到集装箱号对应的海运订单，集装箱号: {container}",
+      "next_step": null
+    },
+    {
+      "step": 11,
+      "operation": "RETURN_ERROR",
+      "message": "查询海运订单失败，集装箱号: {container}",
+      "next_step": null
+    }
+  ],
+  "final_sql_template": "UPDATE t_marine_order SET wh_id = null, unloading_dock_id = null, status = -1, actual_delivery_time = null, empty_container_date = null, return_container_date = null WHERE marine_order_id = ?; UPDATE r_electronic_container_order SET change_warehouse_flag = 0, logistics_status = 0 WHERE id = ?; INSERT INTO t_check_status_change(order_id, status, status_type, create_by) VALUES (?, -1, 1, '系统运维');"
+}

@@ -62,6 +62,7 @@ async def entity_extraction_node(state: WorkOrderState) -> Dict[str, Any]:
         query_steps_config = None
         work_order_subtype = None
         sql = None
+        config_match_failed = False  # 标记配置匹配是否失败
 
         logger.info(f"[{task_id}] 开始智能匹配配置 (类型: {operation_type})")
         match_result = await mutation_steps_service.match_config_by_content(
@@ -138,15 +139,20 @@ async def entity_extraction_node(state: WorkOrderState) -> Dict[str, Any]:
                     if query_steps_config:
                         logger.info(f"[{task_id}] 为 {work_order_subtype} 加载了 {len(query_steps_config.get('steps', []))} 个步骤")
                     else:
-                        logger.warning(f"[{task_id}] 未找到 {work_order_subtype} 的配置，将使用默认 DML 生成")
+                        logger.warning(f"[{task_id}] 未找到 {work_order_subtype} 的配置")
+                        config_match_failed = True
                 else:
-                    logger.warning(f"[{task_id}] 智能匹配失败且未指定 work_order_subtype，将使用默认 DML 生成")
+                    logger.warning(f"[{task_id}] 智能匹配失败且未指定 work_order_subtype")
+                    config_match_failed = True
 
+        logger.info(f"[{task_id}] DEBUG: 返回 config_match_failed = {config_match_failed}")
+        
         result = {
             "entities": entities,
             "attachment_parsed_data": attachment_data,
             "query_steps_config": query_steps_config,
             "work_order_subtype": work_order_subtype,
+            "config_match_failed": config_match_failed,
             "current_node": "entity_extraction",
         }
 

@@ -5,6 +5,8 @@ SQL 查询工具
 """
 
 from typing import Dict, Any, List, Optional
+from datetime import datetime, date
+from decimal import Decimal
 import mysql.connector
 from mysql.connector import Error
 from langchain_core.tools import tool
@@ -59,6 +61,7 @@ async def query_mysql(sql: str) -> Dict[str, Any]:
                 password=settings.mysql.mysql_password,
                 database=settings.mysql.mysql_database,
                 charset=settings.mysql.mysql_charset,
+                collation='utf8mb4_general_ci',  # 兼容MySQL 5.7
                 connection_timeout=settings.mysql.mysql_connection_timeout,
                 autocommit=True,
                 use_pure=True
@@ -86,7 +89,17 @@ async def query_mysql(sql: str) -> Dict[str, Any]:
                         serialized_row.append(value.decode('utf-8', errors='replace'))
                     elif value is None:
                         serialized_row.append(None)
+                    elif isinstance(value, (int, float)):
+                        # 保持数字类型不变
+                        serialized_row.append(value)
+                    elif isinstance(value, (datetime, date)):
+                        # 日期时间类型转字符串
+                        serialized_row.append(value.isoformat())
+                    elif isinstance(value, Decimal):
+                        # Decimal 转 float
+                        serialized_row.append(float(value))
                     else:
+                        # 其他类型转字符串
                         serialized_row.append(str(value))
                 serialized_rows.append(serialized_row)
 

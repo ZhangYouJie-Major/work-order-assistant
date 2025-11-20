@@ -1,6 +1,6 @@
 {
   "work_order_type": "cancel_marine_order",
-  "description": "取消海运单 - 根据入库单号查询并取消海运单及关联的电子箱单 | 操作对象: 海运单(t_marine_order)、电子箱单(r_electronic_container_order) | 查询参数: receipt_order_number(入库单号)",
+  "description": "取消清关资料 | 操作对象: 海运单(t_marine_order)、电子箱单(r_electronic_container_order) | 查询参数: receipt_order_number(入库单号)",
   "steps": [
     {
       "step": 1,

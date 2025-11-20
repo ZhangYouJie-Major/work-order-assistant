@@ -198,6 +198,90 @@ class EmailService:
             f"抄送: {len(cc_emails)} 人"
         )
 
+
+    async def send_manual_intervention_email(
+        self,
+        to_emails: List[str],
+        cc_emails: List[str],
+        task_id: str,
+        ticket_id: str,
+        work_order_content: str = "",
+        reason: str = "工单内容不清晰或无法匹配到合适的配置",
+    ) -> None:
+        """
+        发送需要人工介入的邮件
+
+        Args:
+            to_emails: 收件人列表（运维/DBA）
+            cc_emails: 抄送列表
+            task_id: 任务 ID
+            ticket_id: 工单编号
+            work_order_content: 工单原始内容
+            reason: 无法自动处理的原因
+        """
+        logger.info(f"发送人工介入邮件 (任务 {task_id})")
+
+        subject = f"【工单需要人工处理】{ticket_id}"
+
+        # 构建工单内容部分
+        work_order_content_html = ""
+        if work_order_content:
+            # 将工单内容转义，防止 HTML 注入
+            import html
+            escaped_content = html.escape(work_order_content)
+            work_order_content_html = f"""<p><strong>工单内容:</strong></p>
+            <div style="background: #fff; padding: 10px; border-left: 3px solid #007bff; margin-top: 10px; white-space: pre-wrap;">{escaped_content}</div>"""
+
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+        .container {{ padding: 20px; }}
+        h3 {{ color: #333; }}
+        .info {{ background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0; }}
+        .warning-box {{ background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; border-radius: 3px; margin: 15px 0; }}
+        .footer {{ margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; color: #888; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>⚠️ 工单需要人工处理</h3>
+
+        <div class="info">
+            <p><strong>任务 ID:</strong> {task_id}</p>
+            <p><strong>工单编号:</strong> {ticket_id}</p>
+            {work_order_content_html}
+        </div>
+
+        <div class="warning-box">
+            <h4>⚠️ 无法自动处理的原因:</h4>
+            <p>{reason}</p>
+        </div>
+
+        <h4>处理建议:</h4>
+        <ul>
+            <li>请仔细检查工单内容，确认用户的真实需求</li>
+            <li>与用户沟通，要求提供更清晰、完整的信息</li>
+            <li>根据实际情况手动编写和执行相应的SQL语句</li>
+        </ul>
+
+        <div class="footer">
+            <p>本邮件由工单智能处理助手自动生成，该工单无法自动处理，请人工介入</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+        await self._send_email(to_emails, subject, html_body, cc_emails)
+
+        logger.info(
+            f"人工介入邮件发送成功，收件人: {len(to_emails)} 人, "
+            f"抄送: {len(cc_emails)} 人"
+        )
     def _highlight_sql(self, sql: str) -> str:
         """
         SQL 语法高亮（简单实现）

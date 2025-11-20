@@ -43,6 +43,45 @@ async def send_dml_email_node(state: WorkOrderState) -> Dict[str, Any]:
                 "current_node": "send_dml_email",
             }
 
+        # 检查是否需要人工介入
+        if dml_info.get("manual_intervention_required", False):
+            logger.warning(f"[{task_id}] 工单需要人工介入，发送通知邮件")
+
+            # 获取工单编号
+            ticket_id = metadata.get("ticket_id", task_id)
+
+            # 获取运维团队邮箱
+            ops_emails = settings.email.email_ops_team
+
+            logger.info(f"[{task_id}] 发送人工介入邮件到运维: {ops_emails}")
+
+            # 检查抄送邮箱
+            if not cc_emails or len(cc_emails) == 0:
+                default_cc = settings.email.email_dev_team
+                if default_cc:
+                    cc_emails = default_cc
+                    logger.warning(
+                        f"[{task_id}] 未提供抄送邮箱，使用默认: {cc_emails}"
+                    )
+
+            # 发送人工介入邮件
+            await email_service.send_manual_intervention_email(
+                to_emails=ops_emails,
+                cc_emails=cc_emails,
+                task_id=task_id,
+                ticket_id=ticket_id,
+                work_order_content=content,
+                reason=dml_info.get("reason", "工单内容不清晰或无法匹配到合适的配置"),
+            )
+
+            logger.info(f"[{task_id}] 人工介入邮件发送成功")
+
+            return {
+                "email_sent": True,
+                "manual_intervention": True,
+                "current_node": "send_dml_email",
+            }
+
         # ===== 打印 DML 信息 =====
         logger.info(f"[{task_id}] " + "=" * 60)
         logger.info(f"[{task_id}] 生成的 DML 语句")

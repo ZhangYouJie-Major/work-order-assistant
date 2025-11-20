@@ -39,6 +39,9 @@ dependencies = [
 
     # 数据库
     "mysql-connector-python>=9.5.0",
+
+    # LangGraph CLI (用于 LangSmith Studio 集成)
+    "langgraph-cli>=0.1.0",
 ]
 
 [project.optional-dependencies]

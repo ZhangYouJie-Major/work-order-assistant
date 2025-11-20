@@ -20,7 +20,10 @@
       "WebFetch(domain:pypi.org)",
       "Bash(cp:*)",
       "Bash(cat:*)",
-      "Bash(set)"
+      "Bash(set)",
+      "Bash(del nul)",
+      "Bash(del:*)",
+      "Bash(.venvScriptspython.exe --version)"
     ],
     "deny": [],
     "ask": []

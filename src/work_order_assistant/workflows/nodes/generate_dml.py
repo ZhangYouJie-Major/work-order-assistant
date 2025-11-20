@@ -7,18 +7,9 @@ DML 生成节点
 from typing import Dict, Any
 import re
 from ...workflows.state import WorkOrderState
-from ...services.llm_service import LLMService
-from ...services.prompt_service import PromptService
-from ...services.mutation_steps_service import MutationStepsService
-from ...config import settings
 from ...utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# 初始化服务
-llm_service = LLMService(settings.llm)
-prompt_service = PromptService()
-mutation_steps_service = MutationStepsService()
 
 
 async def generate_dml_node(state: WorkOrderState) -> Dict[str, Any]:
@@ -37,22 +28,50 @@ async def generate_dml_node(state: WorkOrderState) -> Dict[str, Any]:
     entities = state.get("entities")
     query_steps_result = state.get("query_steps_result")
     query_steps_config = state.get("query_steps_config")
+    config_match_failed = state.get("config_match_failed", False)
 
     logger.info(f"[{task_id}] 开始生成 DML")
+    logger.info(f"[{task_id}] DEBUG: config_match_failed = {config_match_failed}")
 
     try:
-        # 模式1: 基于多步骤查询配置生成 DML
+        # 如果配置匹配失败，返回特殊的 dml_info，表示需要人工处理
+        if config_match_failed:
+            logger.warning(f"[{task_id}] 配置匹配失败，无法自动生成 DML，需要人工介入")
+            return {
+                "dml_info": {
+                    "manual_intervention_required": True,
+                    "reason": "工单内容不清晰或无法匹配到合适的配置，无法自动生成DML",
+                    "operation_type": "MANUAL",
+                    "affected_tables": [],
+                    "sql": None,
+                    "risk_level": "unknown",
+                    "description": "此工单需要人工介入处理"
+                },
+                "current_node": "generate_dml",
+            }
+
+        # 基于多步骤查询配置生成 DML
         if query_steps_config and query_steps_result and query_steps_result.get("success"):
             logger.info(f"[{task_id}] 使用多步骤查询结果生成 DML")
             dml_info = _generate_dml_from_steps(
                 task_id,
                 query_steps_result
             )
-        # 模式2: 使用 LLM 生成 DML（回退方案）
         else:
-            logger.info(f"[{task_id}] 使用 LLM 生成 DML")
-            prompt_template = prompt_service.load_mutation_specific_prompt("data_update")
-            dml_info = await llm_service.generate_dml(entities, prompt_template)
+            # 如果没有配置或查询失败，也需要人工介入
+            logger.warning(f"[{task_id}] 缺少配置或多步骤查询失败，需要人工介入")
+            return {
+                "dml_info": {
+                    "manual_intervention_required": True,
+                    "reason": "缺少配置信息或多步骤查询执行失败，无法自动生成DML",
+                    "operation_type": "MANUAL",
+                    "affected_tables": [],
+                    "sql": None,
+                    "risk_level": "unknown",
+                    "description": "此工单需要人工介入处理"
+                },
+                "current_node": "generate_dml",
+            }
 
         # 记录生成的 SQL 语句数量
         sql_statements = dml_info.get("sql_statements", [dml_info.get("sql")])
@@ -235,6 +254,14 @@ def _replace_variables(template: str, context: Dict[str, Any]) -> str:
     Returns:
         替换后的字符串
     """
+    # 处理 None 值（来自 JSON null）
+    if template is None:
+        return "NULL"
+
+    # 处理数字类型（int, float）- 直接返回字符串形式，不加引号
+    if isinstance(template, (int, float)):
+        return str(template)
+
     # 处理特殊函数（如 NOW()）
     if isinstance(template, str) and template.upper() in ["NOW()", "CURRENT_TIMESTAMP()", "NULL"]:
         return template

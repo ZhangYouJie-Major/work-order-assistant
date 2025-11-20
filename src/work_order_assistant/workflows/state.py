@@ -61,6 +61,9 @@ class WorkOrderState(TypedDict, total=False):
     work_order_subtype: Optional[str]
     """工单子类型（如 cancel_marine_order, update_quotation）"""
 
+    config_match_failed: Optional[bool]
+    """配置匹配是否失败（用于判断是否需要人工介入）"""
+
     # ============ 错误信息 ============
     error: Optional[str]
     """错误信息"""

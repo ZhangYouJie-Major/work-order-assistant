@@ -64,6 +64,8 @@ EMAIL_OPS_TEAM=ops@example.com,dba@example.com
 
 ### 3. 启动服务
 
+#### 方式一：FastAPI 启动（REST API 模式）
+
 ```bash
 # 开发模式
 python -m work_order_assistant.main
@@ -71,6 +73,32 @@ python -m work_order_assistant.main
 # 或使用 uvicorn
 uvicorn work_order_assistant.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+访问 API 文档：
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+#### 方式二：LangGraph CLI 启动（支持 LangSmith Studio）
+
+```bash
+# 使用 langgraph dev 启动
+langgraph dev
+
+# 或使用快捷脚本
+# Windows:
+start_langgraph.bat
+
+# Linux/Mac:
+bash start_langgraph.sh
+```
+
+这种方式支持：
+- LangSmith Studio 可视化调试
+- 工作流实时追踪
+- 节点状态监控
+- 本地开发调试
+
+详细使用说明请参考：[LangGraph CLI 使用指南](docs/LANGGRAPH_CLI_GUIDE.md)
 
 ### 4. 访问 API 文档
 
@@ -121,6 +149,7 @@ work-order-assistant/
 ├── src/work_order_assistant/
 │   ├── __init__.py
 │   ├── main.py                    # FastAPI 应用入口
+│   ├── agent.py                   # LangGraph CLI 入口 (新增)
 │   ├── config.py                  # 配置管理
 │   ├── api/                       # API 层
 │   │   ├── routes/                # 路由
@@ -137,10 +166,15 @@ work-order-assistant/
 │   │   └── prompt_service.py      # 提示词管理
 │   ├── models/                    # 数据模型
 │   └── utils/                     # 工具函数
+├── docs/                          # 文档目录
+│   └── LANGGRAPH_CLI_GUIDE.md     # LangGraph CLI 使用指南 (新增)
 ├── prompts/                       # 提示词模板
 │   ├── base/                      # 基础提示词
 │   ├── query/                     # 查询类提示词
 │   └── mutation/                  # 变更类提示词
+├── langgraph.json                 # LangGraph CLI 配置 (新增)
+├── start_langgraph.bat            # Windows 启动脚本 (新增)
+├── start_langgraph.sh             # Linux/Mac 启动脚本 (新增)
 ├── pyproject.toml                 # 项目配置
 ├── .env.example                   # 环境变量示例
 └── README.md                      # 本文件
